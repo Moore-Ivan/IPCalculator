@@ -2,7 +2,7 @@
 
 > 基于 Java Swing 开发的桌面级网络计算工具，同时支持 IPv4 与 IPv6 双栈环境，面向网络工程师、系统管理员及运维人员设计，提供从基础地址解析到复杂网络规划的一站式计算能力。
 
-当前版本：**v1.5**
+当前版本：**v1.5.1**
 
 ## ✨ 功能特性
 
@@ -274,10 +274,11 @@ git push origin v1.6
 | [build.yml](file:///d:/Development/JavaProject/IPCalculator/.github/workflows/build.yml) | push / PR 到 main | 编译 + 测试，保证主干可构建 |
 | [release.yml](file:///d:/Development/JavaProject/IPCalculator/.github/workflows/release.yml) | 推送 `v*` 标签 / 手动 | 构建 EXE 并发布 GitHub Release |
 
-## �� 版本
+## 📖 版本
 
 | 版本 | 说明 |
 |------|------|
+| v1.5.1 | 修复 NoClassDefFoundError(HttpClient)，改用 HttpURLConnection 消除模块化依赖 |
 | v1.5 | 新增 GitHub Releases 在线更新、版本号统一注入、CI 自动发版 |
 | v1.4 | IPv4 + IPv6 双栈支持，FlatLaf 主题，jpackage 原生打包 |
 
