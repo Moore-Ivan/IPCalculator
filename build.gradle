@@ -151,6 +151,29 @@ tasks.register('myJpackage', Exec) {
         ])
     }
 
-    // 执行拼接好的 jpackage 命令
-    commandLine argsList
+    // 将参数写入 UTF-8 编码的 @argfile，再以 `jpackage @file` 方式调用。
+    // 背景：CI 环境 (windows-latest, 英文 locale) 命令行编码为系统代码页 (CP1252)，
+    // 直接通过命令行传递中文 (--name IP子网计算器) 会乱码成 "IP?????"，
+    // 导致 jpackage 报 "Invalid Application name"。@argfile 在 JDK 21 下以 UTF-8
+    // 读取 (JEP 400 后默认 file.encoding=UTF-8)，可彻底规避命令行编码问题。
+    def argFile = layout.buildDirectory.file("tmp/jpackage-args.txt").get().asFile
+    doFirst {
+        argFile.parentFile.mkdirs()
+        StringBuilder sb = new StringBuilder()
+        // argsList[0] 是 jpackage 可执行文件本身，写入 argfile 时跳过
+        for (int i = 1; i < argsList.size(); i++) {
+            String a = argsList[i]
+            // 含空格或引号的参数用双引号包裹，并转义内部引号
+            if (a.contains(' ') || a.contains('"')) {
+                sb.append('"').append(a.replace('"', '\\"')).append('"')
+            } else {
+                sb.append(a)
+            }
+            sb.append('\n')
+        }
+        argFile.setText(sb.toString(), 'UTF-8')
+        logger.lifecycle("jpackage @argfile 已生成: {}", argFile.absolutePath)
+    }
+    // 执行 jpackage，参数通过 @argfile 传递
+    commandLine jpackageExec, '@' + argFile.absolutePath
 }
