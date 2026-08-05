@@ -465,7 +465,7 @@ public class ContactAuthor {
 "                    </div>\n" +
 "                    <div class=\"item-content\">\n" +
 "                        <div class=\"label\">软件版本</div>\n" +
-"                        <div class=\"value\">v1.4</div>\n" +
+"                        <div class=\"value\">" + VersionInfo.getDisplayVersion() + "</div>\n" +
 "                    </div>\n" +
 "                </div>\n" +
 "                <div class=\"software-item\">\n" +

@@ -1,0 +1,39 @@
+name: Build
+
+# 在 push / PR 时进行编译与测试校验，确保主干代码可构建
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 编译与测试 (JDK 21)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 配置 Gradle (带缓存)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 编译 + 测试
+        run: ./gradlew build --no-daemon
+
+      - name: 上传 JAR 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: IPCalculator-jars
+          path: build/libs/*.jar
+          if-no-files-found: warn

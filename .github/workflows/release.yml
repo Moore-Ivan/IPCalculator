@@ -1,0 +1,96 @@
+name: Release
+
+# 触发条件：推送 v* 形式的标签 (例如 v1.5)，或手动在 Actions 页面运行
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# 创建 Release 需要写权限
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: 构建 Windows 安装包并发布 Release
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 21 (Temurin，含 jpackage 与 jmods)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 配置 Gradle (带缓存)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 显示工具版本
+        shell: bash
+        run: |
+          java -version
+          "$JAVA_HOME/bin/jpackage" --version
+          echo "WIX=$WIX"
+
+      - name: 构建 EXE 安装包 (jpackage)
+        shell: bash
+        run: ./gradlew myJpackage --no-daemon --stacktrace
+
+      - name: 定位生成的 EXE
+        id: locate
+        shell: bash
+        run: |
+          set -e
+          exe="$(find build/jpackage -type f -name "*.exe" | head -n 1)"
+          if [ -z "$exe" ]; then
+            echo "未找到生成的 EXE 文件" >&2
+            exit 1
+          fi
+          echo "exe_path=$exe" >> "$GITHUB_OUTPUT"
+          echo "exe_name=$(basename "$exe")" >> "$GITHUB_OUTPUT"
+          echo "找到安装包: $exe"
+
+      - name: 生成 latest.json 元数据 (供旧版本应用拉取检查，可选)
+        id: meta
+        shell: bash
+        run: |
+          # 从 build.gradle 提取版本号
+          version="$(grep -E "def cfgVersion" build.gradle | head -n1 | sed -E 's/.*= *'\''([^'\'']+)'\''/\1/')"
+          tag="${GITHUB_REF_NAME:-manual}"
+          # tag 形如 v1.5，去掉前缀 v
+          ver_from_tag="${tag#v}"
+          [ -z "$version" ] && version="$ver_from_tag"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          cat > latest.json <<EOF
+          {
+            "version": "${version}",
+            "tag": "${tag}",
+            "url": "https://github.com/${{ github.repository }}/releases/latest"
+          }
+          EOF
+          cat latest.json
+
+      - name: 上传 EXE 构建产物 (方便未发版时调试下载)
+        uses: actions/upload-artifact@v4
+        with:
+          name: IPCalculator-windows-exe
+          path: build/jpackage/*.exe
+          if-no-files-found: error
+
+      - name: 创建 GitHub Release 并附带 EXE
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            ${{ steps.locate.outputs.exe_path }}
+            latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

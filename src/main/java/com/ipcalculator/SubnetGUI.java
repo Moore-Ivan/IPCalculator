@@ -27,7 +27,7 @@ public class SubnetGUI extends JFrame {
     private Rectangle savedBounds;
 
     public SubnetGUI() {
-        setTitle("IP子网计算器 v1.4 (IPv4 + IPv6)");
+        setTitle("IP子网计算器 " + VersionInfo.getDisplayVersion() + " (IPv4 + IPv6)");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(800, 580);
         setMinimumSize(new Dimension(800, 500));
@@ -156,9 +156,18 @@ public class SubnetGUI extends JFrame {
         themeBtn.setToolTipText("切换暗色/亮色主题");
         themeBtn.addActionListener(e -> toggleTheme());
 
+        JButton updateBtn = new JButton("检查更新");
+        updateBtn.setToolTipText("检查是否有新版本 (F9)");
+        updateBtn.setMnemonic(KeyEvent.VK_U);
+        updateBtn.addActionListener(e -> {
+            setStatus("正在检查更新...");
+            UpdateChecker.checkAsync(SubnetGUI.this, true);
+        });
+
         buttonPanel.add(contactBtn);
         buttonPanel.add(shortcutBtn);
         buttonPanel.add(themeBtn);
+        buttonPanel.add(updateBtn);
         buttonPanel.add(clearHistoryBtn);
         buttonPanel.add(baseConvertBtn);
         buttonPanel.add(maskConvertBtn);
@@ -278,6 +287,16 @@ public class SubnetGUI extends JFrame {
                 } else {
                     setStatus("无法打开联系作者页面", true);
                 }
+            }
+        });
+
+        KeyStroke f9Key = KeyStroke.getKeyStroke(KeyEvent.VK_F9, 0);
+        inputMap.put(f9Key, "checkUpdate");
+        actionMap.put("checkUpdate", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                setStatus("正在检查更新...");
+                UpdateChecker.checkAsync(SubnetGUI.this, true);
             }
         });
     }
@@ -451,6 +470,13 @@ public class SubnetGUI extends JFrame {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {}
         }
-        SwingUtilities.invokeLater(() -> new SubnetGUI().setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            SubnetGUI gui = new SubnetGUI();
+            gui.setVisible(true);
+            // 启动后自动检查更新 (每 24 小时最多一次，仅在发现新版本时弹窗)
+            if (UpdateChecker.shouldAutoCheck()) {
+                UpdateChecker.checkAsync(gui, false);
+            }
+        });
     }
 }
