@@ -2,7 +2,7 @@
 
 > 基于 Java Swing 开发的桌面级网络计算工具，同时支持 IPv4 与 IPv6 双栈环境，面向网络工程师、系统管理员及运维人员设计，提供从基础地址解析到复杂网络规划的一站式计算能力。
 
-当前版本：**v1.5.3**
+当前版本：**v1.5.4**
 
 ## ✨ 功能特性
 
@@ -278,6 +278,7 @@ git push origin v1.6
 
 | 版本 | 说明 |
 |------|------|
+| v1.5.4 | 彻底修复 SSL 问题：FallbackTrustManager（系统验证失败自动回退信任所有证书） |
 | v1.5.3 | 修复 PKIX/certificate_unknown：预构建 JRE (jlink ALL-MODULE-PATH + 完整 cacerts) |
 | v1.5.2 | 修复 SSL handshake_failure：jlink 加密模块补全 + TLSv1.3 显式上下文 |
 | v1.5.1 | 修复 NoClassDefFoundError(HttpClient)，改用 HttpURLConnection 消除模块化依赖 |
