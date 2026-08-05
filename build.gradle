@@ -6,7 +6,7 @@ plugins {
 
 def cfgAppName = 'IPCalculator' // 内部标识、文件名前缀、主 Jar 名
 def cfgDisplayName = 'IP子网计算器' // 安装包显示的名称、开始菜单名称
-def cfgVersion = '1.5.2' // 统一版本号
+def cfgVersion = '1.5.3' // 统一版本号
 def cfgMainClass = 'com.ipcalculator.SubnetGUI' // 统一主类入口
 def cfgVendor = 'Ivan' // 发行商/公司名称
 def cfgMainJarName = "${cfgAppName}-${cfgVersion}.jar" // 动态计算主 Jar 名称
@@ -92,71 +92,79 @@ shadowJar {
 }
 
 // ==========================================
-// 4. 配置原生 jpackage 打包 (替代第三方插件)
+// 4. 预构建 JRE：jlink 全模块 + 完整 cacerts
+//    解决 jpackage --add-modules 的两个系统性缺陷：
+//    (a) 手动列举模块容易遗漏 (如 jdk.crypto.ec) 导致 TLS 握手失败
+//    (b) jlink 默认不拷贝 JDK 完整 cacerts 根证书库，导致 PKIX 路径构建失败
+// ==========================================
+def preparedJreDir = layout.buildDirectory.dir("custom-jre").get().asFile
+tasks.register('prepareJre', Exec) {
+    def jlinkExec = "${System.getProperty('java.home')}/bin/jlink"
+    if (org.gradle.internal.os.OperatingSystem.current().windows) {
+        jlinkExec += ".exe"
+    }
+    doFirst {
+        if (preparedJreDir.exists()) {
+            preparedJreDir.deleteDir()
+        }
+    }
+    commandLine jlinkExec,
+            '--add-modules', 'ALL-MODULE-PATH',
+            '--output', preparedJreDir.absolutePath,
+            '--no-header-files',
+            '--no-man-pages',
+            '--compress', '2'
+    doLast {
+        def srcCacerts = file("${System.getProperty('java.home')}/lib/security/cacerts")
+        if (srcCacerts.exists()) {
+            def destDir = new File(preparedJreDir, "lib/security")
+            destDir.mkdirs()
+            ant.copy(file: srcCacerts, tofile: new File(destDir, "cacerts"))
+            logger.lifecycle("已将完整 cacerts 拷贝到预构建 JRE")
+        }
+    }
+}
+
+// ==========================================
+// 5. 配置原生 jpackage 打包
 // ==========================================
 tasks.register('myJpackage', Exec) {
-    // 让打包任务自动依赖于 installDist (确保打包前 lib 目录已经准备好)
-    dependsOn 'installDist'
-    
-    // 动态获取当前 JDK 的 jpackage 可执行文件路径
+    dependsOn 'installDist', 'prepareJre'
+
     def jpackageExec = "${System.getProperty('java.home')}/bin/jpackage"
     if (org.gradle.internal.os.OperatingSystem.current().windows) {
         jpackageExec += ".exe"
     }
 
-    // 基础通用参数配置
     def argsList = [
         jpackageExec,
-        // 使用 ASCII 名称 (cfgAppName) 而非中文显示名 (cfgDisplayName)：
-        // jpackage 的原生启动器在 Windows 英文 locale 下用系统代码页 (CP1252)
-        // 解析命令行参数与 @argfile，中文字符会丢失为 '?'，导致 WiX 构建失败。
-        // 应用窗口标题仍由 Java 代码 (SubnetGUI) 设置为中文 "IP子网计算器"。
         '--name', cfgAppName,
         '--app-version', "${project.version}",
         '--vendor', cfgVendor,
         '--copyright', "Copyright @ ${cfgVendor}",
         '--description', "IPv4/IPv6 subnet calculator based on Java Swing",
-        // 1. 告诉 jpackage 去哪里找“标准 Jar + 依赖 lib” (由 installDist 任务生成)
         '--input', layout.buildDirectory.dir("install/IPCalculator/lib").get().asFile.absolutePath,
-        // 4. 指定主 Jar 和 主类 (注意这里用的是标准 Jar 的名字)
         '--main-jar', cfgMainJarName,
         '--main-class', cfgMainClass,
-        // 2. 生成的 .exe 安装包放在哪里
-        '--dest', layout.buildDirectory.dir("jpackage").get().asFile.absolutePath
+        '--dest', layout.buildDirectory.dir("jpackage").get().asFile.absolutePath,
+        // 使用预构建 JRE (包含完整模块和 cacerts)
+        '--runtime-image', preparedJreDir.absolutePath
     ]
 
-    // 如果存在自定义 JRE，则添加 runtime-image 参数
-    def customJrePath = layout.projectDirectory.dir("custom-jre").asFile.absolutePath
-    if (file(customJrePath).exists()) {
-        argsList.addAll(['--runtime-image', customJrePath])
-    } else {
-        // 本地未提供自定义 JRE (例如 GitHub Actions CI 环境)：
-        // 让 jpackage 通过 jlink 自动生成运行时镜像，并显式声明所需模块，
-        // 避免因自动依赖分析遗漏导致运行时缺失模块 (NoClassDefFoundError)。
-        // 加密模块: jdk.crypto.ec 提供 ECDHE 椭圆曲线密码套件 (GitHub TLS 1.3 必需)
-        //         jdk.crypto.cryptoki 提供 PKCS#11 令牌支持
-        argsList.addAll(['--add-modules', 'java.desktop,java.logging,java.management,java.naming,jdk.crypto.ec,jdk.crypto.cryptoki'])
-    }
-
-    // 5. 针对 Windows 系统的特殊配置 (如果你是在 Windows 下打包)
     if (org.gradle.internal.os.OperatingSystem.current().windows) {
         argsList.addAll([
-            '--type', 'exe', // 生成 .exe (也可以改成 'msi')
+            '--type', 'exe',
             '--icon', "${projectDir}/src/main/resources/${cfgAppName}.ico",
-            '--win-shortcut', // 自动创建“桌面”快捷方式
-            '--win-shortcut-prompt', // 自动提示用户是否创建“桌面”快捷方式
-            '--win-dir-chooser', // 安装时允许用户选择安装目录
-            '--win-menu' // 自动创建“开始”菜单快捷方式
+            '--win-shortcut',
+            '--win-shortcut-prompt',
+            '--win-dir-chooser',
+            '--win-menu'
         ])
-    } 
-    // 如果你是在 Mac 下打包，这里会自动走 Mac 的逻辑
-    else if (org.gradle.internal.os.OperatingSystem.current().macOsX) {
+    } else if (org.gradle.internal.os.OperatingSystem.current().macOsX) {
         argsList.addAll([
             '--type', 'dmg'
-            // '--icon', "${projectDir}/src/main/resources/app.icns"
         ])
     }
 
-    // 执行拼接好的 jpackage 命令 (所有参数均为 ASCII，无跨平台编码问题)
     commandLine argsList
 }
