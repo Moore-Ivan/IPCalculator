@@ -1,0 +1,141 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.gradleup.shadow' version '9.4.2'
+}
+
+def cfgAppName = 'IPCalculator' // 内部标识、文件名前缀、主 Jar 名
+def cfgDisplayName = 'IP子网计算器' // 安装包显示的名称、开始菜单名称
+def cfgVersion = '1.4' // 统一版本号
+def cfgMainClass = 'com.ipcalculator.SubnetGUI' // 统一主类入口
+def cfgVendor = 'Ivan' // 发行商/公司名称
+def cfgMainJarName = "${cfgAppName}-${cfgVersion}.jar" // 动态计算主 Jar 名称
+
+// 将版本号注入到 Gradle 项目全局属性中 (影响默认打包命名)
+project.version = cfgVersion
+project.group = 'com.ipcalculator' // 建议加上 group，Maven 发布时需要
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.formdev:flatlaf:3.5'
+    implementation 'com.google.code.gson:gson:2.10.1'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+// 【优化】使用现代的 Toolchain 替代老旧的 sourceCompatibility
+/*java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}*/
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// ==========================================
+// 1. 配置 Application 插件 (核心入口)
+// ==========================================
+application {
+    // 指定你的 Swing 界面主类
+    mainClass = cfgMainClass
+}
+
+// ==========================================
+// 2. 配置 标准 Jar (Thin Jar)
+// ==========================================
+jar {
+    archiveBaseName.set(cfgAppName)
+    archiveVersion.set(cfgVersion)
+    archiveClassifier.set('') // 确保标准 Jar 没有后缀
+    manifest {
+        attributes(
+            'Main-Class': application.mainClass.get(),
+            'Implementation-Title': cfgDisplayName,
+            'Implementation-Version': cfgVersion
+        )
+    }
+}
+
+// ==========================================
+// 3. 配置 Fat Jar (Shadow Jar)
+// ==========================================
+shadowJar {
+    archiveBaseName.set(cfgAppName)
+    archiveVersion.set(cfgVersion)
+    archiveClassifier.set('all') 
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+    // 【防坑配置】智能合并 SPI 资源文件，防止第三方库(如 FlatLaf)内部配置被覆盖
+    mergeServiceFiles()
+    append 'META-INF/LICENSE'
+    append 'META-INF/NOTICE'
+}
+
+// ==========================================
+// 4. 配置原生 jpackage 打包 (替代第三方插件)
+// ==========================================
+tasks.register('myJpackage', Exec) {
+    // 让打包任务自动依赖于 installDist (确保打包前 lib 目录已经准备好)
+    dependsOn 'installDist'
+    
+    // 动态获取当前 JDK 的 jpackage 可执行文件路径
+    def jpackageExec = "${System.getProperty('java.home')}/bin/jpackage"
+    if (org.gradle.internal.os.OperatingSystem.current().windows) {
+        jpackageExec += ".exe"
+    }
+
+    // 基础通用参数配置
+    def argsList = [
+        jpackageExec,
+        '--name', cfgDisplayName,
+        '--app-version', "${project.version}",
+        '--vendor', cfgVendor,
+        '--copyright', "Copyright @ ${cfgVendor}",
+        '--description', "基于 Java Swing 开发的桌面级网络计算工具，同时支持 IPv4 与 IPv6 双栈环境，面向网络工程师、系统管理员及运维人员设计，提供从基础地址解析到复杂网络规划的一站式计算能力",
+        // 1. 告诉 jpackage 去哪里找“标准 Jar + 依赖 lib” (由 installDist 任务生成)
+        '--input', layout.buildDirectory.dir("install/IPCalculator/lib").get().asFile.absolutePath,
+        // 4. 指定主 Jar 和 主类 (注意这里用的是标准 Jar 的名字)
+        '--main-jar', cfgMainJarName,
+        '--main-class', cfgMainClass,
+        // 2. 生成的 .exe 安装包放在哪里
+        '--dest', layout.buildDirectory.dir("jpackage").get().asFile.absolutePath
+    ]
+
+    // 如果存在自定义 JRE，则添加 runtime-image 参数
+    def customJrePath = layout.projectDirectory.dir("custom-jre").asFile.absolutePath
+    if (file(customJrePath).exists()) {
+        argsList.addAll(['--runtime-image', customJrePath])
+    }
+
+    // 5. 针对 Windows 系统的特殊配置 (如果你是在 Windows 下打包)
+    if (org.gradle.internal.os.OperatingSystem.current().windows) {
+        argsList.addAll([
+            '--type', 'exe', // 生成 .exe (也可以改成 'msi')
+            '--icon', "${projectDir}/src/main/resources/${cfgDisplayName}.ico",
+            '--win-shortcut', // 自动创建“桌面”快捷方式
+            '--win-shortcut-prompt', // 自动提示用户是否创建“桌面”快捷方式
+            '--win-dir-chooser', // 安装时允许用户选择安装目录
+            '--win-menu' // 自动创建“开始”菜单快捷方式
+        ])
+    } 
+    // 如果你是在 Mac 下打包，这里会自动走 Mac 的逻辑
+    else if (org.gradle.internal.os.OperatingSystem.current().macOsX) {
+        argsList.addAll([
+            '--type', 'dmg'
+            // '--icon', "${projectDir}/src/main/resources/app.icns"
+        ])
+    }
+
+    // 执行拼接好的 jpackage 命令
+    commandLine argsList
+}
