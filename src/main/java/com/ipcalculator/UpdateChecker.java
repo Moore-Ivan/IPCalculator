@@ -5,6 +5,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
 import javax.swing.*;
 import java.awt.*;
 import java.io.BufferedReader;
@@ -18,6 +21,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -360,6 +364,19 @@ public final class UpdateChecker {
         conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
         conn.setReadTimeout(READ_TIMEOUT_MS);
         conn.setInstanceFollowRedirects(true);
+
+        // 显式配置 TLS 上下文，确保 HTTPS 连接使用现代 TLS 协议
+        // (某些系统默认配置可能回退到过时的 TLS 版本导致 handshake_failure)
+        if (conn instanceof HttpsURLConnection) {
+            try {
+                SSLContext ctx = SSLContext.getInstance("TLSv1.3");
+                ctx.init(null, null, null);
+                ((HttpsURLConnection) conn).setSSLSocketFactory(ctx.getSocketFactory());
+            } catch (GeneralSecurityException e) {
+                // TLSv1.3 不可用时回退到系统默认
+                System.err.println("UpdateChecker: TLSv1.3 不可用，使用系统默认 SSL - " + e.getMessage());
+            }
+        }
         return conn;
     }
 

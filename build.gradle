@@ -6,7 +6,7 @@ plugins {
 
 def cfgAppName = 'IPCalculator' // 内部标识、文件名前缀、主 Jar 名
 def cfgDisplayName = 'IP子网计算器' // 安装包显示的名称、开始菜单名称
-def cfgVersion = '1.5.1' // 统一版本号
+def cfgVersion = '1.5.2' // 统一版本号
 def cfgMainClass = 'com.ipcalculator.SubnetGUI' // 统一主类入口
 def cfgVendor = 'Ivan' // 发行商/公司名称
 def cfgMainJarName = "${cfgAppName}-${cfgVersion}.jar" // 动态计算主 Jar 名称
@@ -133,8 +133,9 @@ tasks.register('myJpackage', Exec) {
         // 本地未提供自定义 JRE (例如 GitHub Actions CI 环境)：
         // 让 jpackage 通过 jlink 自动生成运行时镜像，并显式声明所需模块，
         // 避免因自动依赖分析遗漏导致运行时缺失模块 (NoClassDefFoundError)。
-        // java.net.http 已改用 java.net.HttpURLConnection 替代 (无模块化依赖)
-        argsList.addAll(['--add-modules', 'java.desktop,java.logging,java.management,java.naming'])
+        // 加密模块: jdk.crypto.ec 提供 ECDHE 椭圆曲线密码套件 (GitHub TLS 1.3 必需)
+        //         jdk.crypto.cryptoki 提供 PKCS#11 令牌支持
+        argsList.addAll(['--add-modules', 'java.desktop,java.logging,java.management,java.naming,jdk.crypto.ec,jdk.crypto.cryptoki'])
     }
 
     // 5. 针对 Windows 系统的特殊配置 (如果你是在 Windows 下打包)
