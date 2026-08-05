@@ -36,6 +36,11 @@ jobs:
           "$JAVA_HOME/bin/jpackage" --version
           echo "WIX=$WIX"
 
+      - name: 切换 Gradle 分发地址为官方源 (CI)
+        # 本地开发使用腾讯云镜像 (国内加速)，CI 环境切换为官方源以确保可达
+        shell: bash
+        run: sed -i 's|mirrors.cloud.tencent.com/gradle|services.gradle.org/distributions|' gradle/wrapper/gradle-wrapper.properties
+
       - name: 构建 EXE 安装包 (jpackage)
         shell: bash
         run: ./gradlew myJpackage --no-daemon --stacktrace

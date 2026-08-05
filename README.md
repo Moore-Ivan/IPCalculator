@@ -261,7 +261,7 @@ git push origin v1.6
 推送 `v*` 标签后，[release.yml](file:///d:/Development/JavaProject/IPCalculator/.github/workflows/release.yml) 会：
 
 - 在 windows-latest 上用 JDK 21 调用 `./gradlew myJpackage` 构建 EXE；
-- 在 [Releases 页面](https://github.com/Moore-Ivan/IPCalculator/releases) 创建新 Release，附带 `IP子网计算器-<版本>.exe` 安装包与 `latest.json`。
+- 在 [Releases 页面](https://github.com/Moore-Ivan/IPCalculator/releases) 创建新 Release，附带 `IPCalculator-<版本>.exe` 安装包与 `latest.json`。
 
 发布完成后，已安装旧版本的用户在启动应用或点击「检查更新」时即可检测到新版本并一键升级。
 

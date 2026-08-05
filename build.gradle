@@ -107,11 +107,15 @@ tasks.register('myJpackage', Exec) {
     // 基础通用参数配置
     def argsList = [
         jpackageExec,
-        '--name', cfgDisplayName,
+        // 使用 ASCII 名称 (cfgAppName) 而非中文显示名 (cfgDisplayName)：
+        // jpackage 的原生启动器在 Windows 英文 locale 下用系统代码页 (CP1252)
+        // 解析命令行参数与 @argfile，中文字符会丢失为 '?'，导致 WiX 构建失败。
+        // 应用窗口标题仍由 Java 代码 (SubnetGUI) 设置为中文 "IP子网计算器"。
+        '--name', cfgAppName,
         '--app-version', "${project.version}",
         '--vendor', cfgVendor,
         '--copyright', "Copyright @ ${cfgVendor}",
-        '--description', "基于 Java Swing 开发的桌面级网络计算工具，同时支持 IPv4 与 IPv6 双栈环境，面向网络工程师、系统管理员及运维人员设计，提供从基础地址解析到复杂网络规划的一站式计算能力",
+        '--description', "IPv4/IPv6 subnet calculator based on Java Swing",
         // 1. 告诉 jpackage 去哪里找“标准 Jar + 依赖 lib” (由 installDist 任务生成)
         '--input', layout.buildDirectory.dir("install/IPCalculator/lib").get().asFile.absolutePath,
         // 4. 指定主 Jar 和 主类 (注意这里用的是标准 Jar 的名字)
@@ -136,7 +140,7 @@ tasks.register('myJpackage', Exec) {
     if (org.gradle.internal.os.OperatingSystem.current().windows) {
         argsList.addAll([
             '--type', 'exe', // 生成 .exe (也可以改成 'msi')
-            '--icon', "${projectDir}/src/main/resources/${cfgDisplayName}.ico",
+            '--icon', "${projectDir}/src/main/resources/${cfgAppName}.ico",
             '--win-shortcut', // 自动创建“桌面”快捷方式
             '--win-shortcut-prompt', // 自动提示用户是否创建“桌面”快捷方式
             '--win-dir-chooser', // 安装时允许用户选择安装目录
@@ -151,29 +155,6 @@ tasks.register('myJpackage', Exec) {
         ])
     }
 
-    // 将参数写入 UTF-8 编码的 @argfile，再以 `jpackage @file` 方式调用。
-    // 背景：CI 环境 (windows-latest, 英文 locale) 命令行编码为系统代码页 (CP1252)，
-    // 直接通过命令行传递中文 (--name IP子网计算器) 会乱码成 "IP?????"，
-    // 导致 jpackage 报 "Invalid Application name"。@argfile 在 JDK 21 下以 UTF-8
-    // 读取 (JEP 400 后默认 file.encoding=UTF-8)，可彻底规避命令行编码问题。
-    def argFile = layout.buildDirectory.file("tmp/jpackage-args.txt").get().asFile
-    doFirst {
-        argFile.parentFile.mkdirs()
-        StringBuilder sb = new StringBuilder()
-        // argsList[0] 是 jpackage 可执行文件本身，写入 argfile 时跳过
-        for (int i = 1; i < argsList.size(); i++) {
-            String a = argsList[i]
-            // 含空格或引号的参数用双引号包裹，并转义内部引号
-            if (a.contains(' ') || a.contains('"')) {
-                sb.append('"').append(a.replace('"', '\\"')).append('"')
-            } else {
-                sb.append(a)
-            }
-            sb.append('\n')
-        }
-        argFile.setText(sb.toString(), 'UTF-8')
-        logger.lifecycle("jpackage @argfile 已生成: {}", argFile.absolutePath)
-    }
-    // 执行 jpackage，参数通过 @argfile 传递
-    commandLine jpackageExec, '@' + argFile.absolutePath
+    // 执行拼接好的 jpackage 命令 (所有参数均为 ASCII，无跨平台编码问题)
+    commandLine argsList
 }
