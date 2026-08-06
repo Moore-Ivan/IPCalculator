@@ -3,7 +3,6 @@ package com.ipcalculator;
 import javax.swing.*;
 import java.awt.event.*;
 import java.lang.ref.WeakReference;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 

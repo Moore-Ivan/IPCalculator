@@ -2,11 +2,8 @@ package com.ipcalculator;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
-import java.lang.ref.WeakReference;
 import java.util.List;
 import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
