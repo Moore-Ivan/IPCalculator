@@ -11,6 +11,7 @@ custom-jre/
 *.iml
 *.ipr
 *.iws
+.trae/
 .vscode/
 *.swp
 *.swo
@@ -51,3 +52,6 @@ temp/
 
 # ===== 运行时生成的配置目录 (程序运行后产生) =====
 config/
+
+# ===== 文档类文件 (日常产生) =====
+GitHub.md
