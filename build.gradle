@@ -6,7 +6,7 @@ plugins {
 
 def cfgAppName = 'IPCalculator' // 内部标识、文件名前缀、主 Jar 名
 def cfgDisplayName = 'IP子网计算器' // 安装包显示的名称、开始菜单名称
-def cfgVersion = '1.5.4' // 统一版本号
+def cfgVersion = '1.5.5' // 统一版本号
 def cfgMainClass = 'com.ipcalculator.SubnetGUI' // 统一主类入口
 def cfgVendor = 'Ivan' // 发行商/公司名称
 def cfgMainJarName = "${cfgAppName}-${cfgVersion}.jar" // 动态计算主 Jar 名称
@@ -46,6 +46,8 @@ tasks.withType(JavaCompile).configureEach {
 // 这样运行时 VersionInfo 可读取与构建一致的版本号，作为更新检查的基准
 // ==========================================
 processResources {
+    // 声明 project.version 为任务输入，确保版本号变化时强制重新处理资源
+    inputs.property "version", project.version
     filesMatching('version.properties') {
         expand(version: project.version)
     }
@@ -92,10 +94,11 @@ shadowJar {
 }
 
 // ==========================================
-// 4. 预构建 JRE：jlink 全模块 + 完整 cacerts
-//    解决 jpackage --add-modules 的两个系统性缺陷：
-//    (a) 手动列举模块容易遗漏 (如 jdk.crypto.ec) 导致 TLS 握手失败
-//    (b) jlink 默认不拷贝 JDK 完整 cacerts 根证书库，导致 PKIX 路径构建失败
+// 4. 预构建 JRE：jlink 最小必要模块 + 完整 cacerts
+//    只包含项目实际用到的模块，大幅缩减 JRE 体积：
+//    - java.desktop  : Swing / AWT / JavaBeans GUI（项目核心 UI）
+//    - jdk.crypto.ec : ECDHE 密码套件（GitHub TLS 连接必需，否则握手失败）
+//    java.base 模块始终自动包含，HttpURLConnection / SSLContext / java.io 等均在其中
 // ==========================================
 def preparedJreDir = layout.buildDirectory.dir("custom-jre").get().asFile
 tasks.register('prepareJre', Exec) {
@@ -109,7 +112,7 @@ tasks.register('prepareJre', Exec) {
         }
     }
     commandLine jlinkExec,
-            '--add-modules', 'ALL-MODULE-PATH',
+            '--add-modules', 'java.desktop,jdk.crypto.ec',
             '--output', preparedJreDir.absolutePath,
             '--no-header-files',
             '--no-man-pages',
