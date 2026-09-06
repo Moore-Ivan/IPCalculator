@@ -380,8 +380,9 @@ public class IPv6Calculator {
             
             // 6to4 地址 (2002::/16) - RFC 3056
             if (addr.shiftRight(112).equals(BigInteger.valueOf(0x2002))) {
-                // 提取嵌入的 IPv4 地址
-                long ipv4Long = addr.and(new BigInteger("FFFFFFFF", 16)).longValue();
+                // 提取嵌入的 IPv4 地址：格式为 2002:V4ADDR:SUBNET::/48，
+                // V4ADDR 位于 128 位地址的第 16-47 位（即右移 80 位后的低 32 位）
+                long ipv4Long = addr.shiftRight(80).and(new BigInteger("FFFFFFFF", 16)).longValue();
                 int octet1 = (int) ((ipv4Long >> 24) & 0xFF);
                 int octet2 = (int) ((ipv4Long >> 16) & 0xFF);
                 int octet3 = (int) ((ipv4Long >> 8) & 0xFF);
@@ -866,14 +867,21 @@ public class IPv6Calculator {
         }
         int commonPrefix = 128 - xor.bitLength();
 
+        // XOR 仅基于网络地址计算，遇到嵌套或混合前缀（如 2001:db8::/32 与 2001:db8::/48）时
+        // 候选超网会过小而无法包含所有网段。逐级缩小前缀（放大超网）直到包含全部网段；
+        // ::/0 覆盖整个地址空间，因此循环必然能找到结果。
         IPv6Block superBlock = new IPv6Block(minNetwork, commonPrefix);
-
-        for (IPv6Block block : blocks) {
-            if (!isIPv6Subset(block, superBlock)) {
-                throw new IllegalArgumentException(
-                    "地址块无法被单个超网包含：范围 " + formatCompressed(minNetwork) + " - " + formatCompressed(maxLast) +
-                    " 需要多个汇总路由");
+        while (commonPrefix > 0) {
+            boolean allContained = true;
+            for (IPv6Block block : blocks) {
+                if (!isIPv6Subset(block, superBlock)) {
+                    allContained = false;
+                    break;
+                }
             }
+            if (allContained) break;
+            commonPrefix--;
+            superBlock = new IPv6Block(minNetwork, commonPrefix);
         }
 
         return superBlock.toString();
@@ -890,7 +898,10 @@ public class IPv6Calculator {
      * 根据主机数获取最小前缀
      */
     public static int getPrefixForHosts(BigInteger hosts) {
-        if (hosts.compareTo(BigInteger.ONE) <= 0) return 128;
+        if (hosts == null || hosts.compareTo(BigInteger.ONE) < 0) {
+            throw new IllegalArgumentException("主机数必须至少为 1");
+        }
+        if (hosts.equals(BigInteger.ONE)) return 128;
         if (hosts.equals(BigInteger.valueOf(2))) return 127;
         int bits = 0;
         while (bits < 128 && BigInteger.ONE.shiftLeft(bits).subtract(BigInteger.ONE).compareTo(hosts) < 0) {
@@ -1363,10 +1374,11 @@ public class IPv6Calculator {
         sb.append("标志 (Flags)  : 0x").append(Integer.toHexString(flags)).append("\n");
         
         // 详细标志解析
+        // 多播标志 4 位为 0|R|P|T（权重 R=0x4, P=0x2, T=0x1），见 RFC 4291/3306/3956
         boolean isTransient = (flags & 0x01) != 0;
-        boolean isPrefixBased = (flags & 0x04) != 0;
+        boolean isPrefixBased = (flags & 0x02) != 0;
         sb.append("  • 短暂标志 (T) : ").append(isTransient ? "是 (临时地址)" : "否 (永久地址)").append("\n");
-        sb.append("  • 前缀标志 (P) : ").append(isPrefixBased ? "是 (基于前缀)" : "否 (嵌入式 RP)").append("\n");
+        sb.append("  • 前缀标志 (P) : ").append(isPrefixBased ? "是 (基于前缀, RFC 3306)" : "否 (非基于前缀)").append("\n");
         
         // 解析组 ID (Group ID) - 低 112 位
         BigInteger groupId = ip.and(new BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFF", 16));

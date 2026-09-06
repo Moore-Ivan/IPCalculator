@@ -223,11 +223,11 @@ public class SubnetCalculator {
 
     /** 根据主机数获取最小前缀 */
     public static int getPrefixForHosts(int hosts) {
-        if (hosts <= 1) return 32;
-        if (hosts == 2) return 31;
         if (hosts < 1) {
             throw new IllegalArgumentException("主机数必须至少为 1");
         }
+        if (hosts == 1) return 32;
+        if (hosts == 2) return 31;
         // 计算需求大小并检查是否超过范围
         int bits = 0;
         while (bits < 32 && safeShiftLeft(bits) - 2 < hosts) bits++;
@@ -491,12 +491,21 @@ public class SubnetCalculator {
             commonPrefix--;
         }
 
+        // XOR 仅基于网络地址计算，遇到嵌套或混合前缀（如 10.0.0.0/8 与 10.0.0.0/24）时
+        // 候选超网会过小而无法包含所有网段。逐级缩小前缀（放大超网）直到包含全部网段；
+        // /0 覆盖整个地址空间，因此循环必然能找到结果。
         AddressBlock superBlock = new AddressBlock(minNetwork, commonPrefix);
-
-        for (AddressBlock block : blocks) {
-            if (!(block.network >= superBlock.network && block.broadcast <= superBlock.broadcast)) {
-                throw new IllegalArgumentException("地址块无法被单个超网包含，需要多个汇总路由");
+        while (commonPrefix > 0) {
+            boolean allContained = true;
+            for (AddressBlock block : blocks) {
+                if (block.network < superBlock.network || block.broadcast > superBlock.broadcast) {
+                    allContained = false;
+                    break;
+                }
             }
+            if (allContained) break;
+            commonPrefix--;
+            superBlock = new AddressBlock(minNetwork, commonPrefix);
         }
 
         return superBlock.toString();
