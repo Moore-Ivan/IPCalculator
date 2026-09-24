@@ -86,8 +86,10 @@ public class ConfigStore {
                 settings.clear();
                 settings.putAll(loaded);
             }
-        } catch (IOException e) {
-            System.err.println("ConfigStore: 加载设置失败: " + e.getMessage());
+        } catch (Exception e) {
+            // 捕获包含 JsonSyntaxException 等运行时异常：配置文件损坏时回退到默认配置，
+            // 避免静态初始化失败导致应用启动即崩溃
+            System.err.println("ConfigStore: 加载设置失败(已忽略, 使用默认配置): " + e.getMessage());
             loadFailed = true;
         }
     }
@@ -128,8 +130,10 @@ public class ConfigStore {
                     historyMap.put(entry.getKey(), new CopyOnWriteArrayList<>(entry.getValue()));
                 }
             }
-        } catch (IOException e) {
-            System.err.println("ConfigStore: 加载历史失败: " + e.getMessage());
+        } catch (Exception e) {
+            // 捕获包含 JsonSyntaxException 等运行时异常：历史文件损坏时回退到空历史，
+            // 避免静态初始化失败导致应用启动即崩溃
+            System.err.println("ConfigStore: 加载历史失败(已忽略, 使用空历史): " + e.getMessage());
             loadFailed = true;
         }
     }

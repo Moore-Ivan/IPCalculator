@@ -302,10 +302,12 @@ public class SubnetGUI extends JFrame {
     }
 
     private void toggleFullscreen() {
+        // 注意：不能调用 setUndecorated()——该方法要求窗口不可显示（not displayable），
+        // 对已显示的窗口调用会抛 IllegalComponentStateException，导致 F11 全屏完全失效。
+        // 直接使用独占全屏模式（setFullScreenWindow），退出时恢复原窗口边界。
         if (isFullscreen) {
             // 退出全屏模式：恢复进入全屏前的窗口尺寸和位置
             graphicsDevice.setFullScreenWindow(null);
-            setUndecorated(false);
             if (savedBounds != null) {
                 setBounds(savedBounds);
             } else {
@@ -314,7 +316,6 @@ public class SubnetGUI extends JFrame {
         } else {
             // 进入全屏模式：保存当前窗口尺寸和位置
             savedBounds = getBounds();
-            setUndecorated(true);
             graphicsDevice.setFullScreenWindow(this);
         }
         isFullscreen = !isFullscreen;

@@ -4,15 +4,19 @@ import javax.swing.*;
 import java.awt.*;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class CalculationWorker {
 
     private static final List<SwingWorker<?, ?>> activeWorkers = new CopyOnWriteArrayList<>();
-    // 使用 WeakHashMap 避免内存泄漏，Worker 被 GC 时自动清理
-    private static final WeakHashMap<SwingWorker<?, ?>, String> workerMessages = new WeakHashMap<>();
+    // 使用 WeakHashMap 避免内存泄漏，Worker 被 GC 时自动清理；
+    // 该映射会被多个 worker 线程（put）和 EDT（get/remove）并发访问，必须包装为同步 Map
+    private static final Map<SwingWorker<?, ?>, String> workerMessages =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public interface CalculationCallback<T> {
         default void onStart() {}

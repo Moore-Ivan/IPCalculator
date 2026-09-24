@@ -55,3 +55,6 @@ config/
 
 # ===== 文档类文件 (日常产生) =====
 GitHub.md
+
+
+bugcheck/

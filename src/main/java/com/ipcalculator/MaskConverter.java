@@ -344,16 +344,27 @@ public class MaskConverter extends JDialog {
             throw new IllegalArgumentException("无效的点分十进制格式");
         }
 
-        int prefix = 0;
+        long mask = 0;
         for (String part : parts) {
-            int octet = Integer.parseInt(part);
+            int octet;
+            try {
+                octet = Integer.parseInt(part);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("无效的掩码数值: \"" + part + "\"");
+            }
             if (octet < 0 || octet > 255) {
                 throw new IllegalArgumentException("每个部分必须在 0-255 之间");
             }
-            if (!isValidMaskOctet(octet)) {
-                throw new IllegalArgumentException("不是有效的子网掩码");
-            }
-            prefix += Integer.bitCount(octet);
+            mask = (mask << 8) | octet;
+        }
+        mask &= 0xFFFFFFFFL;
+
+        int prefix = Long.bitCount(mask);
+        // 校验掩码连续性：数值必须等于该前缀对应的标准掩码。
+        // 仅逐段校验 octet 会漏过 255.0.255.0、0.255.0.0 等非连续掩码
+        long canonical = (0xFFFFFFFFL << (32 - prefix)) & 0xFFFFFFFFL;
+        if (mask != canonical) {
+            throw new IllegalArgumentException("不是有效的子网掩码");
         }
         return prefix;
     }
@@ -423,11 +434,6 @@ public class MaskConverter extends JDialog {
             }
         }
         return binary.toString();
-    }
-
-    private boolean isValidMaskOctet(int octet) {
-        return octet == 0 || octet == 128 || octet == 192 || octet == 224 ||
-               octet == 240 || octet == 248 || octet == 252 || octet == 254 || octet == 255;
     }
 
     private boolean isValidBinaryMask(String binary) {

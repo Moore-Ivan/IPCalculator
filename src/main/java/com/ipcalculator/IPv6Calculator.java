@@ -804,20 +804,23 @@ public class IPv6Calculator {
         BigInteger subnetSize = BigInteger.ONE.shiftLeft(128 - newPrefix);
         BigInteger maxSubnets = BigInteger.ONE.shiftLeft(newPrefix - majorPrefix);
 
-        long totalCount = maxSubnets.min(BigInteger.valueOf(Integer.MAX_VALUE)).longValue();
-        long start = (pageNum - 1) * (long) pageSize;
-        long end = Math.min(start + pageSize, totalCount);
-
-        if (start >= totalCount) {
+        // 页边界必须用 BigInteger 计算：总数可能超过 long/Integer.MAX_VALUE
+        // （如 /32 → /64 共 2^32 个子网），截断会导致后半部分永远无法翻页
+        BigInteger start = BigInteger.valueOf((pageNum - 1) * (long) pageSize);
+        if (start.compareTo(maxSubnets) >= 0) {
             return new ArrayList<>();
         }
+        int count = maxSubnets.subtract(start).min(BigInteger.valueOf(pageSize)).intValue();
 
-        return java.util.stream.LongStream.range(start, end)
-                .mapToObj(i -> new IPv6Block(
-                        majorNetwork.add(subnetSize.multiply(BigInteger.valueOf(i))),
-                        newPrefix
-                ))
-                .collect(java.util.stream.Collectors.toList());
+        List<IPv6Block> result = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            BigInteger index = start.add(BigInteger.valueOf(i));
+            result.add(new IPv6Block(
+                    majorNetwork.add(subnetSize.multiply(index)),
+                    newPrefix
+            ));
+        }
+        return result;
     }
 
     /**

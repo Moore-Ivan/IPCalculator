@@ -146,8 +146,11 @@ public class NumberBaseConverter extends JDialog {
 
     private void loadSavedValues() {
         String savedInput = ConfigStore.getSetting("base_converter.input", "");
-        int savedFromBase = Integer.parseInt(ConfigStore.getSetting("base_converter.from_base", "2"));
-        int savedToBase = Integer.parseInt(ConfigStore.getSetting("base_converter.to_base", "0"));
+        // 使用带默认值/边界检查的读取，防止配置损坏导致窗口无法打开
+        int savedFromBase = ConfigStore.getSetting("base_converter.from_base", 2);
+        int savedToBase = ConfigStore.getSetting("base_converter.to_base", 0);
+        if (savedFromBase < 0 || savedFromBase >= BASES.length) savedFromBase = 2;
+        if (savedToBase < 0 || savedToBase >= BASES.length) savedToBase = 0;
 
         inputField.setText(savedInput);
         fromBaseCombo.setSelectedIndex(savedFromBase);
@@ -175,6 +178,14 @@ public class NumberBaseConverter extends JDialog {
 
         int fromBase = BASE_VALUES[fromBaseCombo.getSelectedIndex()];
         int toBase = BASE_VALUES[toBaseCombo.getSelectedIndex()];
+
+        // 拒绝带符号的输入：BigInteger 会接受 "+"/"-" 前缀，
+        // 负数经 formatBinary/前缀拼接后会产生错乱结果（如 000-1010）
+        if (input.startsWith("+") || input.startsWith("-")) {
+            errorLabel.setText("不支持正负号，请输入非负数值");
+            resultField.setText("");
+            return;
+        }
 
         try {
             BigInteger value = new BigInteger(input, fromBase);

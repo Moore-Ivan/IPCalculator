@@ -7,9 +7,6 @@ import com.google.gson.JsonParser;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
 import javax.swing.*;
 import java.awt.*;
 import java.io.BufferedReader;
@@ -24,8 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.security.cert.X509Certificate;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -148,8 +143,6 @@ public final class UpdateChecker {
             conn.setInstanceFollowRedirects(true);
             conn.connect();
 
-            ConfigStore.setSetting(SETTING_LAST_CHECK, String.valueOf(System.currentTimeMillis() / 1000L));
-
             int code = conn.getResponseCode();
             if (code == 404) {
                 return CheckResult.ok(null, current, current);
@@ -164,6 +157,9 @@ public final class UpdateChecker {
             if (info == null || info.downloadUrl == null) {
                 return CheckResult.error(current, "未在最新 Release 中找到 .exe 安装包");
             }
+            // 只有成功获取到有效 Release 信息才更新"上次检查时间"，
+            // 避免网络抖动/限流后 24 小时内不再自动检查
+            ConfigStore.setSetting(SETTING_LAST_CHECK, String.valueOf(System.currentTimeMillis() / 1000L));
             boolean newer = isNewer(info.version, current);
             return CheckResult.ok(newer ? info : null, current, info.version);
         } catch (Exception e) {
@@ -371,61 +367,16 @@ public final class UpdateChecker {
 
         if (conn instanceof HttpsURLConnection) {
             try {
+                // 强制使用 TLSv1.3；ctx.init(null, null, null) 使用系统默认信任管理器，
+                // 保持完整的证书链校验，防止中间人替换下载的安装包
                 SSLContext ctx = SSLContext.getInstance("TLSv1.3");
-                ctx.init(null, new TrustManager[]{new FallbackTrustManager()}, null);
+                ctx.init(null, null, null);
                 ((HttpsURLConnection) conn).setSSLSocketFactory(ctx.getSocketFactory());
             } catch (GeneralSecurityException e) {
                 System.err.println("UpdateChecker: TLSv1.3 初始化失败，使用系统默认 SSL - " + e.getMessage());
             }
         }
         return conn;
-    }
-
-    /**
-     * 先用系统默认信任管理器验证证书；若验证失败（如 JRE cacerts 不完整），
-     * 自动回退到信任所有证书，确保 HTTPS 连接不会因证书问题失败。
-     * 仅连接到已知的 GitHub API 端点，因此信任所有证书是安全的。
-     */
-    private static final class FallbackTrustManager implements X509TrustManager {
-        private final X509TrustManager defaultTm;
-
-        FallbackTrustManager() {
-            X509TrustManager tm = null;
-            try {
-                TrustManagerFactory tmf = TrustManagerFactory.getInstance(
-                        TrustManagerFactory.getDefaultAlgorithm());
-                tmf.init((KeyStore) null);
-                for (TrustManager t : tmf.getTrustManagers()) {
-                    if (t instanceof X509TrustManager) {
-                        tm = (X509TrustManager) t;
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                System.err.println("UpdateChecker: 无法获取系统默认信任管理器 - " + e.getMessage());
-            }
-            this.defaultTm = tm;
-        }
-
-        @Override
-        public void checkClientTrusted(X509Certificate[] chain, String authType) {}
-
-        @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) {
-            if (defaultTm != null) {
-                try {
-                    defaultTm.checkServerTrusted(chain, authType);
-                    return;
-                } catch (Exception e) {
-                    System.err.println("UpdateChecker: 系统证书验证失败，回退到信任所有证书 - " + e.getMessage());
-                }
-            }
-        }
-
-        @Override
-        public X509Certificate[] getAcceptedIssuers() {
-            return defaultTm != null ? defaultTm.getAcceptedIssuers() : new X509Certificate[0];
-        }
     }
 
     private static String readResponse(HttpURLConnection conn) throws IOException {
