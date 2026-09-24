@@ -161,7 +161,7 @@ public class SubnetGUI extends JFrame {
         updateBtn.setMnemonic(KeyEvent.VK_U);
         updateBtn.addActionListener(e -> {
             setStatus("正在检查更新...");
-            UpdateChecker.checkAsync(SubnetGUI.this, true);
+            UpdateChecker.checkAsync(SubnetGUI.this, true, SubnetGUI.this::setStatus);
         });
 
         buttonPanel.add(contactBtn);
@@ -296,7 +296,7 @@ public class SubnetGUI extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 setStatus("正在检查更新...");
-                UpdateChecker.checkAsync(SubnetGUI.this, true);
+                UpdateChecker.checkAsync(SubnetGUI.this, true, SubnetGUI.this::setStatus);
             }
         });
     }
@@ -476,7 +476,7 @@ public class SubnetGUI extends JFrame {
             gui.setVisible(true);
             // 启动后自动检查更新 (每 24 小时最多一次，仅在发现新版本时弹窗)
             if (UpdateChecker.shouldAutoCheck()) {
-                UpdateChecker.checkAsync(gui, false);
+                UpdateChecker.checkAsync(gui, false, gui::setStatus);
             }
         });
     }

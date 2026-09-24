@@ -2,7 +2,7 @@
 
 > 基于 Java Swing 开发的桌面级网络计算工具，同时支持 IPv4 与 IPv6 双栈环境，面向网络工程师、系统管理员及运维人员设计，提供从基础地址解析到复杂网络规划的一站式计算能力。
 
-当前版本：**v1.5.7**
+当前版本：**v1.5.8**
 
 ## ✨ 功能特性
 
@@ -68,8 +68,8 @@
 - 📋 **输入历史记录** —— 自动保存近期输入，可一键清除
 - 📊 **内存监控** —— 实时显示 JVM 内存占用
 - 🌗 **明暗双主题** —— 基于 FlatLaf 的亮色 / 暗色主题切换
-- 🖥️ **全屏模式** —— 支持一键切换全屏
-- 🔄 **在线更新** —— 自动检查 GitHub Release 新版本，一键下载并静默覆盖安装
+- 🖥️ **全屏模式** —— 支持一键切换全屏（F11 独占全屏，不修改窗口装饰）
+- 🔄 **在线更新** —— 自动检查 GitHub Release 新版本，支持实时下载速率/剩余时间显示、后台下载不阻塞主窗口、一键取消
 
 ## ⌨️ 快捷键
 
@@ -131,6 +131,8 @@ IPCalculator/
             └── VlsmTest.java             # 单元测试
 ```
 
+> 📋 **缺陷修复报告**：详细的 bug 发现过程、根本原因与解决方案见 [docs/BUGFIX\_REPORT.md](docs/BUGFIX_REPORT.md)。
+
 ## 🚀 快速开始
 
 ### 环境要求
@@ -172,10 +174,15 @@ gradle myJpackage
 
 **工作流程**：
 
-1. **启动自动检查** —— 程序启动时自动查询 GitHub Releases 最新版本，每 24 小时最多检查一次（时间戳持久化在 `config/settings.json` 中，避免触发 API 速率限制）。仅在发现新版本时弹窗，无新版本不打扰用户。
+1. **启动自动检查** —— 程序启动时自动查询 GitHub Releases 最新版本，每 24 小时最多检查一次（时间戳仅在检查**成功**后更新，网络失败不消耗重试机会）。仅在发现新版本时弹窗，无新版本不打扰用户。
 2. **手动检查** —— 点击底部「检查更新」按钮，或按 `F9`。
 3. **版本比较** —— 采用语义化版本比较（`1.10` > `1.9`），与本地 `VersionInfo` 读取的版本号对比。
-4. **下载安装** —— 确认更新后，下载新版 EXE 安装包（带进度提示），完成后以 `/passive` 模式启动安装程序并退出当前进程，由安装程序静默覆盖安装。
+4. **下载安装** —— 确认更新后，下载新版 EXE 安装包。下载对话框为非模态（不阻塞主窗口），支持：
+   - 实时下载速率显示（B/s → KB/s → MB/s 自动切换，指数平滑防跳变）
+   - 剩余时间估算（基于平滑速率与剩余字节数）
+   - **「后台下载」** 按钮：隐藏下载窗口，进度推送到主窗口状态栏，可继续使用程序所有功能
+   - **「取消下载」** 按钮：中断下载并清理临时文件
+   - 下载完成后以 `/passive` 模式启动安装程序并退出当前进程，由安装程序静默覆盖安装
 5. **发布页跳转** —— 也可选择「查看发布页」在浏览器中打开 Release 说明。
 
 > ⚠️ 安装目录位于 `Program Files` 等 system 目录时，更新会触发 UAC 提权，属正常现象。
@@ -187,7 +194,7 @@ gradle myJpackage
 | `update.autoCheck`      | `true` | 是否在启动时自动检查更新      |
 | `update.lastCheckEpoch` | `0`    | 上次检查的 Unix 时间戳（秒） |
 
-**仓库地址**：更新检查器硬编码指向 `Moore-Ivan/IPCalculator`，如需 fork 后自用，修改 [UpdateChecker.java](file:///d:/Development/JavaProject/IPCalculator/src/main/java/com/ipcalculator/UpdateChecker.java) 顶部的 `REPO_OWNER` / `REPO_NAME` 常量。
+**仓库地址**：更新检查器硬编码指向 `Moore-Ivan/IPCalculator`，如需 fork 后自用，修改 [UpdateChecker.java](src/main/java/com/ipcalculator/UpdateChecker.java) 顶部的 `REPO_OWNER` / `REPO_NAME` 常量。
 
 ## 🏗️ 架构概览
 
@@ -215,7 +222,7 @@ gradle myJpackage
 gradle test
 ```
 
-现有测试覆盖 VLSM 子网划分等核心算法，位于 [VlsmTest.java](file:///d:/Development/JavaProject/IPCalculator/src/test/java/com/ipcalculator/VlsmTest.java)。
+现有测试覆盖 VLSM 子网划分等核心算法，位于 [VlsmTest.java](src/test/java/com/ipcalculator/VlsmTest.java)。
 
 ## � 发布与部署
 
@@ -225,7 +232,7 @@ gradle test
 
 1. 在 GitHub 创建仓库 `Moore-Ivan/IPCalculator`（或你自己的仓库）。
 2. 推送代码到仓库（见下文「首次推送」）。
-3. 若仓库名 / 所有者不同，需同步修改 [UpdateChecker.java](file:///d:/Development/JavaProject/IPCalculator/src/main/java/com/ipcalculator/UpdateChecker.java) 顶部的 `REPO_OWNER` / `REPO_NAME`。
+3. 若仓库名 / 所有者不同，需同步修改 [UpdateChecker.java](src/main/java/com/ipcalculator/UpdateChecker.java) 顶部的 `REPO_OWNER` / `REPO_NAME`。
 4. 确认仓库 **Settings → Actions → General → Workflow permissions** 已授予 **Read and write permissions**（用于创建 Release）。
 
 ### 首次推送
@@ -258,7 +265,7 @@ git tag v1.6
 git push origin v1.6
 ```
 
-推送 `v*` 标签后，[release.yml](file:///d:/Development/JavaProject/IPCalculator/.github/workflows/release.yml) 会：
+推送 `v*` 标签后，[release.yml](.github/workflows/release.yml) 会：
 
 - 在 windows-latest 上用 JDK 21 调用 `./gradlew myJpackage` 构建 EXE；
 - 在 [Releases 页面](https://github.com/Moore-Ivan/IPCalculator/releases) 创建新 Release，附带 `IPCalculator-<版本>.exe` 安装包与 `latest.json`。
@@ -269,19 +276,10 @@ git push origin v1.6
 
 ### 工作流说明
 
-| 工作流                                                                                          | 触发条件             | 作用                        |
-| -------------------------------------------------------------------------------------------- | ---------------- | ------------------------- |
-| [build.yml](file:///d:/Development/JavaProject/IPCalculator/.github/workflows/build.yml)     | push / PR 到 main | 编译 + 测试，保证主干可构建           |
-| [release.yml](file:///d:/Development/JavaProject/IPCalculator/.github/workflows/release.yml) | 推送 `v*` 标签 / 手动  | 构建 EXE 并发布 GitHub Release |
-
-## 📖 版本
-
-| 版本     | 说明                                                                        |
-| ------ | ------------------------------------------------------------------------- |
-| v1.5.4 | 彻底修复 SSL 问题：FallbackTrustManager（系统验证失败自动回退信任所有证书）                        |
-| v1.5.3 | 修复 PKIX/certificate\_unknown：预构建 JRE (jlink ALL-MODULE-PATH + 完整 cacerts) |
-| v1.5.2 | 修复 SSL handshake\_failure：jlink 加密模块补全 + TLSv1.3 显式上下文                    |
-| v1.5.1 | 修复 NoClassDefFoundError(HttpClient)，改用 HttpURLConnection 消除模块化依赖          |
+| 工作流                                          | 触发条件             | 作用                        |
+| -------------------------------------------- | ---------------- | ------------------------- |
+| [build.yml](.github/workflows/build.yml)     | push / PR 到 main | 编译 + 测试，保证主干可构建           |
+| [release.yml](.github/workflows/release.yml) | 推送 `v*` 标签 / 手动  | 构建 EXE 并发布 GitHub Release |
 
 ## 📄 许可
 
