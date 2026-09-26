@@ -145,7 +145,7 @@ tasks.register('myJpackage', Exec) {
         '--app-version', "${project.version}",
         '--vendor', cfgVendor,
         '--copyright', "Copyright @ ${cfgVendor}",
-        '--description', "IPv4/IPv6 subnet calculator based on Java Swing",
+        '--description', "IPv4/IPv6 subnet calculator based on Java FlatLaf",
         '--input', layout.buildDirectory.dir("install/IPCalculator/lib").get().asFile.absolutePath,
         '--main-jar', cfgMainJarName,
         '--main-class', cfgMainClass,

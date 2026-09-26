@@ -1,10 +1,13 @@
 package com.ipcalculator;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
@@ -29,6 +32,7 @@ public class SubnetGUI extends JFrame {
     public SubnetGUI() {
         setTitle("IP子网计算器 " + VersionInfo.getDisplayVersion() + " (IPv4 + IPv6)");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
+        loadAppIcon();
         setSize(800, 580);
         setMinimumSize(new Dimension(800, 500));
         setLocationRelativeTo(null);
@@ -299,6 +303,109 @@ public class SubnetGUI extends JFrame {
                 UpdateChecker.checkAsync(SubnetGUI.this, true, SubnetGUI.this::setStatus);
             }
         });
+    }
+
+    /**
+     * 从 classpath 加载应用图标（/IPCalculator.ico）。
+     * Temurin/OpenJDK 21 未内置 ICO ImageIO 读取器，因此手工解析 ICO 容器：
+     * 每帧为内嵌 PNG 或 BMP(DIB)，解码出全部尺寸后交给 setIconImages，
+     * 窗口标题栏、任务栏、Alt-Tab 切换界面会自动选用合适分辨率。
+     */
+    private void loadAppIcon() {
+        try (InputStream is = getClass().getResourceAsStream("/IPCalculator.ico")) {
+            if (is == null) {
+                System.err.println("未找到图标资源: /IPCalculator.ico");
+                return;
+            }
+            List<Image> icons = parseIco(is.readAllBytes());
+            if (!icons.isEmpty()) {
+                setIconImages(icons);
+            } else {
+                System.err.println("图标文件中未解析出任何帧: /IPCalculator.ico");
+            }
+        } catch (Exception e) {
+            System.err.println("加载应用图标失败: " + e.getMessage());
+        }
+    }
+
+    /** 解析 ICO 容器，返回全部帧图像 */
+    private static List<Image> parseIco(byte[] data) {
+        List<Image> icons = new ArrayList<>();
+        // ICONDIR: reserved(2)=0, type(2)=1, count(2)
+        if (data.length < 6 || u16le(data, 0) != 0 || u16le(data, 2) != 1) return icons;
+        int count = u16le(data, 4);
+        for (int i = 0; i < count; i++) {
+            int e = 6 + i * 16; // ICONDIRENTRY 每项 16 字节
+            if (e + 16 > data.length) break;
+            long size = u32le(data, e + 8);
+            long offset = u32le(data, e + 12);
+            if (size <= 0 || offset < 0 || offset + size > data.length) continue;
+            Image img = decodeIcoFrame(data, (int) offset, (int) size);
+            if (img != null) icons.add(img);
+        }
+        return icons;
+    }
+
+    /** 解码单个 ICO 帧：内嵌 PNG 直接读；BMP DIB 补 14 字节 BITMAPFILEHEADER 后读 */
+    private static Image decodeIcoFrame(byte[] data, int offset, int size) {
+        try {
+            // PNG 签名: 89 50 4E 47 0D 0A 1A 0A
+            if (size >= 8 && (data[offset] & 0xFF) == 0x89
+                    && data[offset + 1] == 'P' && data[offset + 2] == 'N'
+                    && data[offset + 3] == 'G') {
+                return ImageIO.read(new java.io.ByteArrayInputStream(data, offset, size));
+            }
+            // BITMAPINFOHEADER：biSize(4) biWidth(4) biHeight(4) biPlanes(2) biBitCount(2)
+            // biCompression(4) biSizeImage(4) ... biClrUsed(4 @32)
+            if (size < 40) return null;
+            int headerSize = (int) u32le(data, offset);
+            int width = (int) u32le(data, offset + 4);
+            int dibHeight = (int) u32le(data, offset + 8);
+            int bitCount = u16le(data, offset + 14);
+            long clrUsed = u32le(data, offset + 32);
+            // ICO 的 BMP 帧 biHeight 通常是实际高度的 2 倍（上半像素数据 + 下半 AND 掩码）
+            int height = dibHeight >= 2 * width ? dibHeight / 2 : dibHeight;
+            if (width <= 0 || height <= 0 || bitCount <= 0) return null;
+
+            long paletteColors = clrUsed > 0 ? clrUsed : (bitCount <= 8 ? 1L << bitCount : 0);
+            int paletteSize = (int) paletteColors * 4;
+            int pixelOffset = headerSize + paletteSize;
+            int rowSize = ((width * bitCount + 31) / 32) * 4; // 每行按 4 字节对齐
+            int pixelSize = rowSize * height; // 只取颜色数据，丢弃尾部 AND 掩码
+            int totalSize = 14 + pixelOffset + pixelSize;
+
+            byte[] bmp = new byte[totalSize];
+            bmp[0] = 'B';
+            bmp[1] = 'M';
+            putU32le(bmp, 2, totalSize);
+            putU32le(bmp, 6, 0);
+            putU32le(bmp, 10, 14 + pixelOffset);
+            int copy = Math.min(size, totalSize - 14);
+            System.arraycopy(data, offset, bmp, 14, copy);
+            // 将 DIB 头中的 biHeight 改为实际高度（覆盖位于 14+8 的 4 字节）
+            putU32le(bmp, 14 + 8, height);
+
+            return ImageIO.read(new java.io.ByteArrayInputStream(bmp));
+        } catch (Exception ex) {
+            System.err.println("解析 ICO 帧失败: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    private static int u16le(byte[] d, int o) {
+        return (d[o] & 0xFF) | ((d[o + 1] & 0xFF) << 8);
+    }
+
+    private static long u32le(byte[] d, int o) {
+        return (d[o] & 0xFFL) | ((d[o + 1] & 0xFFL) << 8)
+                | ((d[o + 2] & 0xFFL) << 16) | ((d[o + 3] & 0xFFL) << 24);
+    }
+
+    private static void putU32le(byte[] d, int o, long v) {
+        d[o] = (byte) v;
+        d[o + 1] = (byte) (v >> 8);
+        d[o + 2] = (byte) (v >> 16);
+        d[o + 3] = (byte) (v >> 24);
     }
 
     private void toggleFullscreen() {

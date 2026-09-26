@@ -93,7 +93,7 @@
 - **构建工具**：Gradle (with [Shadow Plugin](https://github.com/GradleUp/shadow))
 - **序列化**：Gson 2.10.1（配置持久化）
 - **测试框架**：JUnit 4
-- **打包工具**：jpackage（生成原生安装包）
+- **打包工具**：Jpackage（生成原生安装包）
 
 ## 📦 项目结构
 
@@ -124,7 +124,7 @@ IPCalculator/
     │   │       ├── IPv4SubnetService.java
     │   │       └── IPv6SubnetService.java
     │   └── resources/
-    │       ├── IP子网计算器.ico          # 应用图标
+    │       ├── IP子网计算器.ico           # 应用图标
     │       └── version.properties        # 版本号模板 (Gradle 填充)
     └── test/
         └── java/com/ipcalculator/
@@ -224,57 +224,7 @@ gradle test
 
 现有测试覆盖 VLSM 子网划分等核心算法，位于 [VlsmTest.java](src/test/java/com/ipcalculator/VlsmTest.java)。
 
-## � 发布与部署
-
-项目通过 GitHub Actions 自动构建 Windows EXE 安装包并发布 Release，客户端的在线更新依赖于此 Release。
-
-### 一次性配置
-
-1. 在 GitHub 创建仓库 `Moore-Ivan/IPCalculator`（或你自己的仓库）。
-2. 推送代码到仓库（见下文「首次推送」）。
-3. 若仓库名 / 所有者不同，需同步修改 [UpdateChecker.java](src/main/java/com/ipcalculator/UpdateChecker.java) 顶部的 `REPO_OWNER` / `REPO_NAME`。
-4. 确认仓库 **Settings → Actions → General → Workflow permissions** 已授予 **Read and write permissions**（用于创建 Release）。
-
-### 首次推送
-
-```bash
-git init
-git remote add origin https://github.com/Moore-Ivan/IPCalculator.git
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git push -u origin main
-```
-
-### 发布新版本（触发自动更新）
-
-发布流程：**改版本号 → 提交 → 打标签 → 推送标签**，CI 会自动构建并发布 Release。
-
-```bash
-# 1. 修改 build.gradle 中的 cfgVersion（项目唯一的版本号来源）
-#    def cfgVersion = '1.6'
-
-# 2. 提交改动
-git add build.gradle
-git commit -m "release: v1.6"
-
-# 3. 打标签 (必须以 v 开头，与 cfgVersion 保持一致)
-git tag v1.6
-
-# 4. 推送标签，触发 Release 工作流
-git push origin v1.6
-```
-
-推送 `v*` 标签后，[release.yml](.github/workflows/release.yml) 会：
-
-- 在 windows-latest 上用 JDK 21 调用 `./gradlew myJpackage` 构建 EXE；
-- 在 [Releases 页面](https://github.com/Moore-Ivan/IPCalculator/releases) 创建新 Release，附带 `IPCalculator-<版本>.exe` 安装包与 `latest.json`。
-
-发布完成后，已安装旧版本的用户在启动应用或点击「检查更新」时即可检测到新版本并一键升级。
-
-> 💡 **版本号一致性**：`build.gradle` 的 `cfgVersion` 是项目唯一的版本号来源，构建时会注入到 `version.properties`，供窗口标题、联系作者页面、更新检查器统一读取。打标签时务必让标签名（去掉 `v`）与 `cfgVersion` 一致。
-
-### 工作流说明
+## 工作流说明
 
 | 工作流                                          | 触发条件             | 作用                        |
 | -------------------------------------------- | ---------------- | ------------------------- |
