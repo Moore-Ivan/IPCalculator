@@ -97,42 +97,6 @@
 
 ## 📦 项目结构
 
-```
-IPCalculator/
-├── build.gradle                  # 构建脚本（含 jar / shadowJar / jpackage 配置）
-├── settings.gradle               # Gradle 设置（含国内镜像源）
-├── gradlew / gradlew.bat         # Gradle Wrapper（CI 构建使用）
-├── .github/workflows/            # GitHub Actions：build.yml / release.yml
-├── custom-jre/                   # 可选：自定义 JRE 运行时镜像
-└── src/
-    ├── main/
-    │   ├── java/com/ipcalculator/
-    │   │   ├── SubnetGUI.java            # 主入口 & 主窗口
-    │   │   ├── SubnetController.java     # 控制器（UI 与服务层桥梁）
-    │   │   ├── SubnetCalculator.java     # IPv4 核心计算引擎
-    │   │   ├── IPv6Calculator.java       # IPv6 核心计算引擎
-    │   │   ├── CidrValidator.java        # IPv4 输入校验
-    │   │   ├── IPv6Validator.java        # IPv6 输入校验
-    │   │   ├── CalculationWorker.java    # SwingWorker 异步计算封装
-    │   │   ├── ConfigStore.java          # 配置与历史持久化
-    │   │   ├── VersionInfo.java          # 版本号 (由 build.gradle 注入)
-    │   │   ├── UpdateChecker.java        # 在线更新检查器 (GitHub Releases)
-    │   │   ├── *Panel.java               # 各功能标签页面板
-    │   │   ├── NumberBaseConverter.java  # 进制转换器
-    │   │   ├── MaskConverter.java        # 掩码转换器
-    │   │   └── service/
-    │   │       ├── IPv4SubnetService.java
-    │   │       └── IPv6SubnetService.java
-    │   └── resources/
-    │       ├── IP子网计算器.ico           # 应用图标
-    │       └── version.properties        # 版本号模板 (Gradle 填充)
-    └── test/
-        └── java/com/ipcalculator/
-            └── VlsmTest.java             # 单元测试
-```
-
-> 📋 **缺陷修复报告**：详细的 bug 发现过程、根本原因与解决方案见 [docs/BUGFIX\_REPORT.md](docs/BUGFIX_REPORT.md)。
-
 ## 🚀 快速开始
 
 ### 环境要求
