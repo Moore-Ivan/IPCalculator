@@ -185,6 +185,17 @@ public class ConfigStore {
         return configDirPath;
     }
     
+    // ========== 主题模式操作 ==========
+    
+    public static void setThemeMode(String mode) {
+        settings.setProperty("theme.mode", mode);
+        saveSettings();
+    }
+    
+    public static String getThemeMode() {
+        return settings.getProperty("theme.mode", "system");
+    }
+    
     // ========== 设置操作 ==========
     
     public static void setSetting(String key, String value) {

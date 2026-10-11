@@ -11,6 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SubnetGUI extends JFrame {
 
@@ -23,19 +26,27 @@ public class SubnetGUI extends JFrame {
     private JLabel memoryLabel;
     private javax.swing.Timer memoryTimer;
     private boolean isFullscreen = false;
-    private boolean isDarkTheme = false;
+    // 当前主题模式: "system"(跟随系统) / "light" / "dark"，volatile 供后台检测线程读取
+    private volatile String themeMode = "system";
     private JButton themeBtn;
     private GraphicsDevice graphicsDevice;
     private volatile boolean isClosing = false;
     private Rectangle savedBounds;
+    // 系统深浅色检测线程（仅跟随系统模式下轮询）
+    private Thread systemThemeWatcher;
 
     public SubnetGUI() {
+        // 先从配置读取主题模式并应用（main 中已设置过一次，此处确保字段与配置同步）
+        loadTheme();
         setTitle("IP子网计算器 " + VersionInfo.getDisplayVersion() + " (IPv4 + IPv6)");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         loadAppIcon();
         setSize(800, 580);
         setMinimumSize(new Dimension(800, 500));
         setLocationRelativeTo(null);
+
+        // 启动系统深浅色变化检测（跟随系统模式下自动切换主题）
+        startSystemThemeWatcher();
 
         graphicsDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
         
@@ -156,8 +167,8 @@ public class SubnetGUI extends JFrame {
             MaskConverter.showConverter(this);
         });
 
-        themeBtn = new JButton("暗色主题");
-        themeBtn.setToolTipText("切换暗色/亮色主题");
+        themeBtn = new JButton("跟随系统");
+        themeBtn.setToolTipText("切换主题模式：跟随系统 → 亮色 → 暗色（F2）");
         themeBtn.addActionListener(e -> toggleTheme());
 
         JButton updateBtn = new JButton("检查更新");
@@ -433,42 +444,176 @@ public class SubnetGUI extends JFrame {
             memoryTimer.stop();
             memoryTimer = null;
         }
+        if (systemThemeWatcher != null) {
+            systemThemeWatcher.interrupt();
+            systemThemeWatcher = null;
+        }
+    }
+
+    // ========== 系统深浅色检测（跟随系统模式） ==========
+
+    /** 启动后台检测线程，每 2 秒检测一次系统深浅色；仅跟随系统模式下自动切换主题 */
+    private void startSystemThemeWatcher() {
+        if (systemThemeWatcher != null) {
+            return;
+        }
+        systemThemeWatcher = new Thread(() -> {
+            boolean lastDark = isSystemDark();
+            while (true) {
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+                // 非跟随系统模式时不检测，避免无谓的系统调用开销
+                if (!"system".equals(themeMode)) {
+                    continue;
+                }
+                boolean dark = isSystemDark();
+                if (dark == lastDark) {
+                    continue;
+                }
+                lastDark = dark;
+                SwingUtilities.invokeLater(() -> applySystemTheme(dark));
+            }
+        }, "system-theme-watcher");
+        systemThemeWatcher.setDaemon(true);
+        systemThemeWatcher.start();
+    }
+
+    /** 系统深浅色变化后，在 EDT 上自动应用对应主题 */
+    private void applySystemTheme(boolean dark) {
+        if (!"system".equals(themeMode)) {
+            return;
+        }
+        try {
+            UIManager.setLookAndFeel(dark ? new FlatDarkLaf() : new FlatLightLaf());
+            SwingUtilities.updateComponentTreeUI(this);
+            updateThemeButtonText();
+            setStatus(dark ? "系统为深色模式，已自动切换到暗色主题" : "系统为浅色模式，已自动切换到亮色主题");
+        } catch (Exception e) {
+            System.err.println("跟随系统自动切换主题失败: " + e.getMessage());
+        }
+    }
+
+    /** 检测操作系统当前是否为深色模式，检测失败时按浅色处理 */
+    static boolean isSystemDark() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        try {
+            if (os.contains("win")) {
+                return isWindowsDark();
+            }
+            if (os.contains("mac")) {
+                // macOS: 桌面属性值形如 "NSAppearanceNameDarkAqua" / "NSAppearanceNameAqua"
+                Object appearance = Toolkit.getDefaultToolkit()
+                        .getDesktopProperty("apple.awt.application.appearance");
+                return appearance instanceof String s && s.contains("Dark");
+            }
+            if (os.contains("nix") || os.contains("nux") || os.contains("aix")) {
+                // Linux/GNOME: 优先 color-scheme，回退 GTK 主题名
+                if (execCommand("gsettings", "get", "org.gnome.desktop.interface", "color-scheme")
+                        .contains("dark")) {
+                    return true;
+                }
+                return execCommand("gsettings", "get", "org.gnome.desktop.interface", "gtk-theme")
+                        .contains("dark");
+            }
+        } catch (Exception e) {
+            System.err.println("检测系统主题失败: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /** 读取 Windows 注册表 AppsUseLightTheme：0=深色模式，1=浅色模式（Win10 1809+） */
+    private static boolean isWindowsDark() {
+        String output = execCommand("reg", "query",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                "/v", "AppsUseLightTheme");
+        Matcher m = Pattern.compile("AppsUseLightTheme\\s+REG_DWORD\\s+0x([0-9a-fA-F]+)")
+                .matcher(output);
+        return m.find() && Integer.parseInt(m.group(1), 16) == 0;
+    }
+
+    /** 执行外部命令并返回其标准输出（失败返回空串，最多等待 2 秒） */
+    private static String execCommand(String... command) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            String output = new String(p.getInputStream().readAllBytes());
+            p.waitFor(2, TimeUnit.SECONDS);
+            p.destroyForcibly();
+            return output;
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private void loadTheme() {
-        isDarkTheme = Boolean.parseBoolean(ConfigStore.getSetting("theme.dark", "false"));
+        themeMode = ConfigStore.getThemeMode();
+        applyThemeForMode(themeMode);
+    }
+
+    /** 按主题模式安装对应 LookAndFeel：system 模式下根据系统深浅色自动选择 */
+    private static void applyThemeForMode(String mode) {
         try {
-            if (isDarkTheme) {
-                UIManager.setLookAndFeel(new FlatDarkLaf());
-            } else {
-                UIManager.setLookAndFeel(new FlatLightLaf());
+            boolean dark;
+            switch (mode) {
+                case "dark" -> dark = true;
+                case "light" -> dark = false;
+                default -> dark = isSystemDark(); // system 或未知值：跟随系统
             }
+            UIManager.setLookAndFeel(dark ? new FlatDarkLaf() : new FlatLightLaf());
         } catch (Exception e) {
             System.err.println("加载主题失败: " + e.getMessage());
         }
     }
 
     private void toggleTheme() {
-        isDarkTheme = !isDarkTheme;
-        ConfigStore.setSetting("theme.dark", String.valueOf(isDarkTheme));
+        // 三种主题模式循环切换：跟随系统 -> 亮色 -> 暗色 -> 跟随系统
+        String oldMode = themeMode;
+        String newMode = switch (themeMode) {
+            case "light" -> "dark";
+            case "dark" -> "system";
+            default -> "light";
+        };
         try {
-            if (isDarkTheme) {
-                UIManager.setLookAndFeel(new FlatDarkLaf());
-            } else {
-                UIManager.setLookAndFeel(new FlatLightLaf());
-            }
+            themeMode = newMode;
+            ConfigStore.setThemeMode(newMode);
+            applyThemeForMode(newMode);
             SwingUtilities.updateComponentTreeUI(this);
             updateThemeButtonText();
-            setStatus(isDarkTheme ? "已切换到暗色主题" : "已切换到亮色主题");
+            setStatus(switch (newMode) {
+                case "dark" -> "已切换到暗色主题";
+                case "light" -> "已切换到亮色主题";
+                default -> "已切换为跟随系统主题";
+            });
         } catch (Exception e) {
             setStatus("切换主题失败: " + e.getMessage(), true);
-            isDarkTheme = !isDarkTheme;
+            // 切换失败时恢复原模式，并按原模式重装外观
+            themeMode = oldMode;
+            ConfigStore.setThemeMode(oldMode);
+            applyThemeForMode(oldMode);
+            SwingUtilities.updateComponentTreeUI(this);
+            updateThemeButtonText();
         }
     }
 
     private void updateThemeButtonText() {
         if (themeBtn != null) {
-            themeBtn.setText(isDarkTheme ? "亮色模式" : "暗色模式");
+            switch (themeMode) {
+                case "dark":
+                    themeBtn.setText("亮色模式");
+                    break;
+                case "light":
+                    themeBtn.setText("暗色模式");
+                    break;
+                case "system":
+                    themeBtn.setText("跟随系统");
+                    break;
+                default:
+                    themeBtn.setText("主题");
+            }
         }
     }
     
@@ -567,12 +712,8 @@ public class SubnetGUI extends JFrame {
 
     public static void main(String[] args) {
         try {
-            boolean isDark = Boolean.parseBoolean(ConfigStore.getSetting("theme.dark", "false"));
-            if (isDark) {
-                UIManager.setLookAndFeel(new FlatDarkLaf());
-            } else {
-                UIManager.setLookAndFeel(new FlatLightLaf());
-            }
+            // 按"跟随系统/亮色/暗色"模式应用主题（system 模式下自动检测系统深浅色）
+            applyThemeForMode(ConfigStore.getThemeMode());
         } catch (Exception ex) {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
