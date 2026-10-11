@@ -110,7 +110,7 @@ gradle run
 
 # 方式二：构建后运行 jar
 gradle jar
-java -jar build/libs/IPCalculator-1.5.jar
+java -jar build/libs/IPCalculator-x.x.x.jar
 ```
 
 ### 构建
@@ -121,7 +121,7 @@ gradle jar
 
 # 2. 构建 Fat Jar（包含所有依赖，可直接运行）
 gradle shadowJar
-# 产物：build/libs/IPCalculator-1.5-all.jar
+# 产物：build/libs/IPCalculator-x.x.x-all.jar
 
 # 3. 生成本地安装包（Windows 生成 .exe，macOS 生成 .dmg）
 gradle myJpackage
