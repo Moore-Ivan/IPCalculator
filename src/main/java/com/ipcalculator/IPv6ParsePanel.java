@@ -66,7 +66,7 @@ public class IPv6ParsePanel extends BaseOperationPanel {
         btnParse.addActionListener(e -> {
             txtAddr.save();
             String addr = txtAddr.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在解析 IPv6 地址...",
+            CalculationWorker.executeWithProgress(this, "正在解析 IPv6 地址...", btnParse,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

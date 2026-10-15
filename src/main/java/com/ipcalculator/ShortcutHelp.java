@@ -17,7 +17,7 @@ public class ShortcutHelp {
 
         String[][] shortcuts = {
             {"F1", "打开快捷键说明"},
-            {"F2", "切换暗色/亮色模式"},
+            {"F2", "循环切换主题：跟随系统 → 亮色 → 暗色"},
             {"F3", "打开进制转换器"},
             {"F4", "打开掩码转换器"},
             {"F9", "检查更新"},
@@ -25,7 +25,9 @@ public class ShortcutHelp {
             {"F11", "切换全屏模式"},
             {"Ctrl + L", "清空结果区域"},
             {"Ctrl + C", "复制结果到剪贴板"},
+            {"Ctrl + PageUp / PageDown", "在六大功能分组间快速切换"},
             {"Enter", "在输入框中按回车执行计算"},
+            {"Esc", "取消正在执行的计算"},
         };
 
         String[] columnNames = {"快捷键", "功能说明"};
@@ -41,7 +43,7 @@ public class ShortcutHelp {
         table.getTableHeader().setReorderingAllowed(false);
 
         JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setPreferredSize(new Dimension(380, 180));
+        scrollPane.setPreferredSize(new Dimension(420, 260));
         panel.add(scrollPane, BorderLayout.CENTER);
 
         JLabel tipLabel = new JLabel("提示：更多功能持续更新中...");

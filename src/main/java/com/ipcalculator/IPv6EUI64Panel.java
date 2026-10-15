@@ -93,7 +93,7 @@ public class IPv6EUI64Panel extends BaseOperationPanel {
             String mac = txtMac.getText().trim();
             String prefix = txtPrefix.getText().trim();
             
-            CalculationWorker.executeWithProgress(this, "正在生成 EUI-64 地址...",
+            CalculationWorker.executeWithProgress(this, "正在生成 EUI-64 地址...", btnGenerate,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

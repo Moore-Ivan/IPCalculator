@@ -15,6 +15,7 @@ public class IPv6VlsmPanel extends BaseOperationPanel {
     private final ResultCallback resultCallback;
     private HistoryComboBox txtCidr;
     private HistoryComboBox txtHosts;
+    private JButton btnVlsm;
     private ErrorIndicator cidrError;
     private ErrorIndicator hostsError;
 
@@ -34,7 +35,7 @@ public class IPv6VlsmPanel extends BaseOperationPanel {
 
         txtCidr = new HistoryComboBox("ipv6_cidr_vlsm", 200);
         txtHosts = new HistoryComboBox("ipv6_hosts_vlsm", 220);
-        JButton btnVlsm = new JButton("VLSM 划分");
+        btnVlsm = new JButton("VLSM 划分");
         JButton exampleBtn = new JButton("示例");
         JButton clearBtn = new JButton("清空");
 
@@ -92,7 +93,7 @@ public class IPv6VlsmPanel extends BaseOperationPanel {
         clearErrors(cidrError, hostsError);
         String cidr = txtCidr.getText().trim();
         String hostList = txtHosts.getText().trim();
-        CalculationWorker.executeWithProgress(this, "正在执行 IPv6 VLSM 划分...",
+        CalculationWorker.executeWithProgress(this, "正在执行 IPv6 VLSM 划分...", btnVlsm,
             new CalculationWorker.CallableWithProgress<List<SubnetTablePanel.SubnetRow>>() {
                 private CalculationWorker.ProgressHandler handler;
                 @Override

@@ -155,26 +155,12 @@ public class CidrPreviewPanel extends JPanel {
     }
     
     @Override
-    public void addNotify() {
-        super.addNotify();
-        // 重新绑定监听器（当面板重新显示时）
-        if (boundTextField != null && boundKeyListener != null) {
-            boundTextField.addKeyListener(boundKeyListener);
-            boundTextField.addFocusListener(boundFocusListener);
-        }
-    }
-    
-    @Override
     public void removeNotify() {
         super.removeNotify();
+        // 面板离开显示层级时停止防抖定时器；
+        // 保留定时器与监听器实例，避免下次显示时重复注册监听器或出现定时器为 null 的空指针
         if (debounceTimer != null) {
             debounceTimer.stop();
-            debounceTimer = null;
-        }
-        // 清理绑定的监听器，防止内存泄漏
-        if (boundTextField != null && boundKeyListener != null) {
-            boundTextField.removeKeyListener(boundKeyListener);
-            boundTextField.removeFocusListener(boundFocusListener);
         }
     }
 }

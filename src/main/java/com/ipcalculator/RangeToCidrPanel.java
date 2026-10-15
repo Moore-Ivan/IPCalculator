@@ -77,7 +77,7 @@ public class RangeToCidrPanel extends BaseOperationPanel {
             txtEnd.save();
             String startIp = txtStart.getText().trim();
             String endIp = txtEnd.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在转换为 CIDR...",
+            CalculationWorker.executeWithProgress(this, "正在转换为 CIDR...", btnConvert,
                 new CalculationWorker.CallableWithProgress<List<SubnetTablePanel.SubnetRow>>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

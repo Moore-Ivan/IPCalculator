@@ -79,7 +79,7 @@ public class IPv6DetailPanel extends BaseOperationPanel {
         btnQuery.addActionListener(e -> {
             txtCidr.save();
             String cidr = txtCidr.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在查询 IPv6 网段详情...",
+            CalculationWorker.executeWithProgress(this, "正在查询 IPv6 网段详情...", btnQuery,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

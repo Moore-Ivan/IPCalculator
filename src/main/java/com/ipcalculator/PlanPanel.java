@@ -104,7 +104,7 @@ public class PlanPanel extends BaseOperationPanel {
             String cidr = txtCidr.getText().trim();
             String deptStr = txtDeptCount.getText().trim();
             String hostsStr = txtHostsPerDept.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在生成网络规划...",
+            CalculationWorker.executeWithProgress(this, "正在生成网络规划...", btnPlan,
                 new CalculationWorker.CallableWithProgress<List<SubnetTablePanel.SubnetRow>>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

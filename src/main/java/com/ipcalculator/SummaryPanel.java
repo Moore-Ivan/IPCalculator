@@ -66,7 +66,7 @@ public class SummaryPanel extends BaseOperationPanel {
         btnSummary.addActionListener(e -> {
             txtCidrs.save();
             String input = txtCidrs.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在汇总路由...",
+            CalculationWorker.executeWithProgress(this, "正在汇总路由...", btnSummary,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

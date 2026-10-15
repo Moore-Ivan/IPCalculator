@@ -73,7 +73,7 @@ public class IPv6MulticastPanel extends BaseOperationPanel {
             txtAddr.save();
             String addr = txtAddr.getText().trim();
             
-            CalculationWorker.executeWithProgress(this, "正在解析多播地址...",
+            CalculationWorker.executeWithProgress(this, "正在解析多播地址...", btnParse,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

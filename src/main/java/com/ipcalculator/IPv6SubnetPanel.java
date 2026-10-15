@@ -102,7 +102,7 @@ public class IPv6SubnetPanel extends BaseOperationPanel {
             clearErrors(cidrError, countError, prefixError);
             String cidr = txtMajorCidr.getText().trim();
             String countStr = txtSubnetCount.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在划分 IPv6 子网...",
+            CalculationWorker.executeWithProgress(this, "正在划分 IPv6 子网...", btnByCount,
                 new CalculationWorker.CallableWithProgress<List<SubnetTablePanel.SubnetRow>>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

@@ -94,7 +94,7 @@ public class SupernetSplitPanel extends BaseOperationPanel {
                 final int pageSize = 100;
 
                 if (totalCount <= pageSize * 2) {
-                    CalculationWorker.executeWithProgress(this, "正在拆分超网...",
+                    CalculationWorker.executeWithProgress(this, "正在拆分超网...", btnSplit,
                         new CalculationWorker.CallableWithProgress<List<SubnetTablePanel.SubnetRow>>() {
                             private CalculationWorker.ProgressHandler handler;
 

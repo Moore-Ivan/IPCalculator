@@ -12,6 +12,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class CalculationWorker {
 
+    /** 进度对话框延迟显示毫秒数：短于此耗时的任务完全不弹窗，避免快速操作"闪窗" */
+    private static final int DIALOG_SHOW_DELAY_MS = 300;
+
     private static final List<SwingWorker<?, ?>> activeWorkers = new CopyOnWriteArrayList<>();
     // 使用 WeakHashMap 避免内存泄漏，Worker 被 GC 时自动清理；
     // 该映射会被多个 worker 线程（put）和 EDT（get/remove）并发访问，必须包装为同步 Map
@@ -119,6 +122,19 @@ public class CalculationWorker {
 
     public static <T> void executeWithProgress(Component parent, String title,
             CallableWithProgress<T> task, CalculationCallback<T> callback) {
+        executeWithProgress(parent, title, null, task, callback);
+    }
+
+    /**
+     * 带进度对话框的后台执行。
+     * 体验优化：
+     * 1. 对话框延迟 {@value #DIALOG_SHOW_DELAY_MS} 毫秒才显示——快速计算在延迟内完成时完全不弹窗，
+     *    避免"闪窗"造成的视觉干扰；只有真正的长任务才展示加载状态。
+     * 2. 传入 actionSource（触发按钮）时，任务期间禁用该按钮，防止用户重复点击发起重复任务。
+     * 3. 支持 ESC 快捷键取消任务（与"取消"按钮等价）。
+     */
+    public static <T> void executeWithProgress(Component parent, String title, JComponent actionSource,
+            CallableWithProgress<T> task, CalculationCallback<T> callback) {
 
         Window parentWindow = SwingUtilities.getWindowAncestor(parent);
         JDialog dialog = new JDialog(parentWindow, title, Dialog.ModalityType.MODELESS);
@@ -149,6 +165,8 @@ public class CalculationWorker {
         dialog.pack();
 
         final SwingWorker<T, ?>[] workerRef = new SwingWorker[1];
+        // 延迟显示定时器（数组形式供内部类引用），任务结束时统一停止
+        final javax.swing.Timer[] showTimer = new javax.swing.Timer[1];
 
         CalculationCallback<T> wrappedCallback = new CalculationCallback<T>() {
             @Override
@@ -166,7 +184,7 @@ public class CalculationWorker {
 
             @Override
             public void onComplete(T result) {
-                dialog.dispose();
+                finishProgress(showTimer[0], dialog, actionSource);
                 if (callback != null) {
                     callback.onComplete(result);
                 }
@@ -174,7 +192,7 @@ public class CalculationWorker {
 
             @Override
             public void onError(Exception e) {
-                dialog.dispose();
+                finishProgress(showTimer[0], dialog, actionSource);
                 if (callback != null) {
                     callback.onError(e);
                 }
@@ -185,8 +203,14 @@ public class CalculationWorker {
             if (workerRef[0] != null) {
                 workerRef[0].cancel(true);
             }
-            dialog.dispose();
+            finishProgress(showTimer[0], dialog, actionSource);
         });
+
+        // ESC 取消任务（与点击"取消"按钮等价），窗口关闭按钮保持禁用，避免误关
+        dialog.getRootPane().registerKeyboardAction(
+                ev -> cancelBtn.doClick(),
+                KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         final SwingWorker<T, Object> worker = new SwingWorker<T, Object>() {
             @Override
@@ -211,27 +235,21 @@ public class CalculationWorker {
                 activeWorkers.remove(this);
                 workerMessages.remove(this);
                 if (isCancelled()) {
-                    SwingUtilities.invokeLater(() -> {
-                        dialog.dispose();
-                    });
+                    finishProgress(showTimer[0], dialog, actionSource);
                     return;
                 }
                 try {
                     T result = get();
                     wrappedCallback.onComplete(result);
                 } catch (java.util.concurrent.CancellationException e) {
-                    SwingUtilities.invokeLater(() -> {
-                        dialog.dispose();
-                    });
+                    finishProgress(showTimer[0], dialog, actionSource);
                 } catch (java.util.concurrent.ExecutionException e) {
                     Throwable cause = e.getCause();
                     // 检测是否为取消操作引起的异常
-                    if (cause instanceof RuntimeException && 
+                    if (cause instanceof RuntimeException &&
                         (cause.getMessage() != null && cause.getMessage().contains("已取消"))) {
                         // 用户取消操作，静默关闭对话框
-                        SwingUtilities.invokeLater(() -> {
-                            dialog.dispose();
-                        });
+                        finishProgress(showTimer[0], dialog, actionSource);
                         return;
                     }
                     wrappedCallback.onError(cause instanceof Exception ? (Exception) cause : e);
@@ -257,8 +275,31 @@ public class CalculationWorker {
         }
         workerRef[0] = worker;
         activeWorkers.add(worker);
+        // 任务期间禁用触发按钮，防止用户重复点击发起重复任务；结束后由 finishProgress 恢复
+        if (actionSource != null) {
+            actionSource.setEnabled(false);
+        }
         worker.execute();
 
-        dialog.setVisible(true);
+        // 延迟显示：任务在 DIALOG_SHOW_DELAY_MS 内完成则完全不弹窗；超时未完成才展示加载状态
+        javax.swing.Timer timer = new javax.swing.Timer(DIALOG_SHOW_DELAY_MS, ev -> {
+            if (!worker.isDone()) {
+                dialog.setVisible(true);
+            }
+        });
+        timer.setRepeats(false);
+        showTimer[0] = timer;
+        timer.start();
+    }
+
+    /** 任务结束统一收尾：停止延迟显示定时器、关闭对话框、恢复触发按钮可用状态 */
+    private static void finishProgress(javax.swing.Timer showTimer, JDialog dialog, JComponent actionSource) {
+        if (showTimer != null) {
+            showTimer.stop();
+        }
+        dialog.dispose();
+        if (actionSource != null) {
+            actionSource.setEnabled(true);
+        }
     }
 }

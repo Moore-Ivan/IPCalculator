@@ -66,7 +66,7 @@ public class IPParsePanel extends BaseOperationPanel {
         btnParse.addActionListener(e -> {
             txtIP.save();
             String ip = txtIP.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在解析 IP 地址...",
+            CalculationWorker.executeWithProgress(this, "正在解析 IP 地址...", btnParse,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

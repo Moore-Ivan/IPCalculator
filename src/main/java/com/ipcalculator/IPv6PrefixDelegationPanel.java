@@ -93,7 +93,7 @@ public class IPv6PrefixDelegationPanel extends BaseOperationPanel {
             String prefix = txtPrefix.getText().trim();
             String subnetPrefixStr = txtSubnetPrefix.getText().trim();
             
-            CalculationWorker.executeWithProgress(this, "正在计算前缀委派...",
+            CalculationWorker.executeWithProgress(this, "正在计算前缀委派...", btnCalculate,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

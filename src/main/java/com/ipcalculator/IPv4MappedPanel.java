@@ -74,7 +74,7 @@ public class IPv4MappedPanel extends BaseOperationPanel {
             txtAddress.save();
             String address = txtAddress.getText().trim();
             
-            CalculationWorker.executeWithProgress(this, "正在转换地址...",
+            CalculationWorker.executeWithProgress(this, "正在转换地址...", btnConvert,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

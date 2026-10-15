@@ -19,6 +19,8 @@ public class ResultTablePanel extends JPanel {
     
     // 列宽记忆
     private int[] columnWidths = {150, 350}; // 默认3:7比例
+    /** 列宽/尺寸监听器是否已注册：保证幂等，避免 setData 反复调用 applyColumnSettings 时监听器不断累积 */
+    private boolean listenersRegistered = false;
     
     public ResultTablePanel() {
         setLayout(new BorderLayout());
@@ -125,6 +127,13 @@ public class ResultTablePanel extends JPanel {
             table.getColumnModel().getColumn(i).setMinWidth(60);
         }
         
+        // 监听列宽/尺寸变化只需注册一次：setData 会重复调用本方法，
+        // 若每次注册会导致监听器随调用次数不断累积（内存持续增长）
+        if (listenersRegistered) {
+            return;
+        }
+        listenersRegistered = true;
+
         // 监听列宽变化，保存到记忆
         table.getColumnModel().addColumnModelListener(new javax.swing.event.TableColumnModelListener() {
             @Override

@@ -12,6 +12,7 @@ import java.util.List;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.FlatDarkLaf;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,6 +23,7 @@ public class SubnetGUI extends JFrame {
     private SubnetTablePanel tablePanel;
     private CardLayout cardLayout;
     private JPanel outputPanel;
+    private JTabbedPane tabbedPane;
     private JLabel statusLabel;
     private JLabel memoryLabel;
     private javax.swing.Timer memoryTimer;
@@ -59,50 +61,17 @@ public class SubnetGUI extends JFrame {
             }
         });
 
-        JTabbedPane tabbedPane = new JTabbedPane();
-        
-        // ========== IPv4 基础 ==========
-        JTabbedPane ipv4BasicTab = new JTabbedPane();
-        ipv4BasicTab.addTab("网段详情", new DetailPanel(this::setResult, this::setStatus));
-        ipv4BasicTab.addTab("IP 地址解析", new IPParsePanel(this::setResult, this::setStatus));
-        ipv4BasicTab.addTab("IP 范围→CIDR", new RangeToCidrPanel(this::setTableResult, this::setStatus));
-        tabbedPane.addTab("IPv4 基础", ipv4BasicTab);
-        
-        // ========== IPv4 子网划分 ==========
-        JTabbedPane ipv4SubnetTab = new JTabbedPane();
-        ipv4SubnetTab.addTab("等长子网", new EqualSubnetPanel(this::setTableResult, this::setStatus));
-        ipv4SubnetTab.addTab("VLSM 变长子网", new VlsmPanel(this::setTableResult, this::setStatus));
-        ipv4SubnetTab.addTab("超网拆分", new SupernetSplitPanel(this::setTableResult, this::setPagedTableResult, this::setStatus));
-        tabbedPane.addTab("IPv4 子网划分", ipv4SubnetTab);
-        
-        // ========== IPv4 高级工具 ==========
-        JTabbedPane ipv4AdvancedTab = new JTabbedPane();
-        ipv4AdvancedTab.addTab("路由汇总", new SummaryPanel(this::setResult, this::setStatus));
-        ipv4AdvancedTab.addTab("冲突检测", new OverlapPanel(this::setResult, this::setStatus));
-        ipv4AdvancedTab.addTab("网络规划向导", new PlanPanel(this::setTableResult, this::setStatus));
-        tabbedPane.addTab("IPv4 高级工具", ipv4AdvancedTab);
-        
-        // ========== IPv6 基础 ==========
-        JTabbedPane ipv6BasicTab = new JTabbedPane();
-        ipv6BasicTab.addTab("网段详情", new IPv6DetailPanel(this::setResult, this::setStatus));
-        ipv6BasicTab.addTab("地址解析", new IPv6ParsePanel(this::setResult, this::setStatus));
-        ipv6BasicTab.addTab("地址范围→CIDR", new IPv6RangePanel(this::setTableResult, this::setStatus));
-        tabbedPane.addTab("IPv6 基础", ipv6BasicTab);
-        
-        // ========== IPv6 子网划分 ==========
-        JTabbedPane ipv6SubnetTab = new JTabbedPane();
-        ipv6SubnetTab.addTab("子网划分", new IPv6SubnetPanel(this::setTableResult, this::setPagedTableResult, this::setStatus));
-        ipv6SubnetTab.addTab("VLSM 变长子网", new IPv6VlsmPanel(this::setTableResult, this::setStatus));
-        tabbedPane.addTab("IPv6 子网划分", ipv6SubnetTab);
-        
-        // ========== IPv6 高级工具 ==========
-        JTabbedPane ipv6AdvancedTab = new JTabbedPane();
-        ipv6AdvancedTab.addTab("路由汇总", new IPv6SummaryPanel(this::setResult, this::setStatus));
-        ipv6AdvancedTab.addTab("EUI-64 地址生成", new IPv6EUI64Panel(this::setResult, this::setStatus));
-        ipv6AdvancedTab.addTab("多播地址解析", new IPv6MulticastPanel(this::setResult, this::setStatus));
-        ipv6AdvancedTab.addTab("DHCPv6 前缀委派", new IPv6PrefixDelegationPanel(this::setResult, this::setStatus));
-        ipv6AdvancedTab.addTab("IPv4 映射 IPv6", new IPv4MappedPanel(this::setResult, this::setStatus));
-        tabbedPane.addTab("IPv6 高级工具", ipv6AdvancedTab);
+        // 【启动优化】标签页懒加载：仅构建首屏可见面板，其余面板在首次切换到对应标签时才创建，
+        // 避免启动时一次性构建 19+ 业务面板（及其历史记录下拉加载）造成的窗口延迟
+        tabbedPane = new JTabbedPane();
+        tabbedPane.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        installLazyTabLoading(tabbedPane);
+        addLazyTab(tabbedPane, "IPv4 基础", this::buildIpv4BasicTab);
+        addLazyTab(tabbedPane, "IPv4 子网划分", this::buildIpv4SubnetTab);
+        addLazyTab(tabbedPane, "IPv4 高级工具", this::buildIpv4AdvancedTab);
+        addLazyTab(tabbedPane, "IPv6 基础", this::buildIpv6BasicTab);
+        addLazyTab(tabbedPane, "IPv6 子网划分", this::buildIpv6SubnetTab);
+        addLazyTab(tabbedPane, "IPv6 高级工具", this::buildIpv6AdvancedTab);
 
         // 输出区域
         resultTablePanel = new ResultTablePanel();
@@ -219,6 +188,105 @@ public class SubnetGUI extends JFrame {
         cardLayout.show(outputPanel, "TEXT");
     }
 
+    // ========== 标签页懒加载 ==========
+
+    /** 占位面板 clientProperty 键：存储真实面板的延迟构建工厂 */
+    private static final Object LAZY_TAB_FACTORY = new Object();
+
+    /** 向标签页注册一个懒加载标签：先放占位面板，首次选中时才调用工厂构建真实面板 */
+    private void addLazyTab(JTabbedPane pane, String title, Supplier<? extends Component> factory) {
+        JPanel placeholder = new JPanel(new BorderLayout());
+        placeholder.putClientProperty(LAZY_TAB_FACTORY, factory);
+        pane.addTab(title, placeholder);
+    }
+
+    /** 监听标签切换：选中的若是占位面板则立即替换为真实面板（支持嵌套标签页） */
+    private void installLazyTabLoading(JTabbedPane pane) {
+        pane.addChangeListener(e -> buildSelectedTab(pane));
+    }
+
+    private void buildSelectedTab(JTabbedPane pane) {
+        Component selected = pane.getSelectedComponent();
+        if (!(selected instanceof JComponent)) {
+            return;
+        }
+        Object factory = ((JComponent) selected).getClientProperty(LAZY_TAB_FACTORY);
+        if (factory instanceof Supplier) {
+            int index = pane.getSelectedIndex();
+            @SuppressWarnings("unchecked")
+            Component real = ((Supplier<Component>) factory).get();
+            // setComponentAt 保留标签标题与选中状态，替换过程无闪烁
+            pane.setComponentAt(index, real);
+            // 嵌套场景：新构建的分组容器本身是标签页时，确保其选中子标签也已构建
+            if (real instanceof JTabbedPane) {
+                buildSelectedTab((JTabbedPane) real);
+            }
+        }
+    }
+
+    private JTabbedPane createSubTabbedPane() {
+        JTabbedPane inner = new JTabbedPane();
+        // 滚动布局：窄窗口下标签自动收纳为滚动箭头，避免换行堆叠挤压输出区
+        inner.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        installLazyTabLoading(inner);
+        return inner;
+    }
+
+    private JTabbedPane buildIpv4BasicTab() {
+        JTabbedPane inner = createSubTabbedPane();
+        addLazyTab(inner, "网段详情", () -> new DetailPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "IP 地址解析", () -> new IPParsePanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "IP 范围→CIDR", () -> new RangeToCidrPanel(this::setTableResult, this::setStatus));
+        buildSelectedTab(inner);
+        return inner;
+    }
+
+    private JTabbedPane buildIpv4SubnetTab() {
+        JTabbedPane inner = createSubTabbedPane();
+        addLazyTab(inner, "等长子网", () -> new EqualSubnetPanel(this::setTableResult, this::setStatus));
+        addLazyTab(inner, "VLSM 变长子网", () -> new VlsmPanel(this::setTableResult, this::setStatus));
+        addLazyTab(inner, "超网拆分", () -> new SupernetSplitPanel(this::setTableResult, this::setPagedTableResult, this::setStatus));
+        buildSelectedTab(inner);
+        return inner;
+    }
+
+    private JTabbedPane buildIpv4AdvancedTab() {
+        JTabbedPane inner = createSubTabbedPane();
+        addLazyTab(inner, "路由汇总", () -> new SummaryPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "冲突检测", () -> new OverlapPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "网络规划向导", () -> new PlanPanel(this::setTableResult, this::setStatus));
+        buildSelectedTab(inner);
+        return inner;
+    }
+
+    private JTabbedPane buildIpv6BasicTab() {
+        JTabbedPane inner = createSubTabbedPane();
+        addLazyTab(inner, "网段详情", () -> new IPv6DetailPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "地址解析", () -> new IPv6ParsePanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "地址范围→CIDR", () -> new IPv6RangePanel(this::setTableResult, this::setStatus));
+        buildSelectedTab(inner);
+        return inner;
+    }
+
+    private JTabbedPane buildIpv6SubnetTab() {
+        JTabbedPane inner = createSubTabbedPane();
+        addLazyTab(inner, "子网划分", () -> new IPv6SubnetPanel(this::setTableResult, this::setPagedTableResult, this::setStatus));
+        addLazyTab(inner, "VLSM 变长子网", () -> new IPv6VlsmPanel(this::setTableResult, this::setStatus));
+        buildSelectedTab(inner);
+        return inner;
+    }
+
+    private JTabbedPane buildIpv6AdvancedTab() {
+        JTabbedPane inner = createSubTabbedPane();
+        addLazyTab(inner, "路由汇总", () -> new IPv6SummaryPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "EUI-64 地址生成", () -> new IPv6EUI64Panel(this::setResult, this::setStatus));
+        addLazyTab(inner, "多播地址解析", () -> new IPv6MulticastPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "DHCPv6 前缀委派", () -> new IPv6PrefixDelegationPanel(this::setResult, this::setStatus));
+        addLazyTab(inner, "IPv4 映射 IPv6", () -> new IPv4MappedPanel(this::setResult, this::setStatus));
+        buildSelectedTab(inner);
+        return inner;
+    }
+
     // ========== 全局快捷键 ==========
 
     private void setupGlobalShortcuts() {
@@ -312,6 +380,29 @@ public class SubnetGUI extends JFrame {
             public void actionPerformed(ActionEvent e) {
                 setStatus("正在检查更新...");
                 UpdateChecker.checkAsync(SubnetGUI.this, true, SubnetGUI.this::setStatus);
+            }
+        });
+
+        // Ctrl+PageDown / Ctrl+PageUp：在六大功能分组间快速切换（与浏览器/编辑器标签切换习惯一致）
+        int menuMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_DOWN, menuMask), "nextTabGroup");
+        actionMap.put("nextTabGroup", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int count = tabbedPane.getTabCount();
+                if (count > 1) {
+                    tabbedPane.setSelectedIndex((tabbedPane.getSelectedIndex() + 1) % count);
+                }
+            }
+        });
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_PAGE_UP, menuMask), "prevTabGroup");
+        actionMap.put("prevTabGroup", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                int count = tabbedPane.getTabCount();
+                if (count > 1) {
+                    tabbedPane.setSelectedIndex((tabbedPane.getSelectedIndex() - 1 + count) % count);
+                }
             }
         });
     }
@@ -524,28 +615,60 @@ public class SubnetGUI extends JFrame {
         return false;
     }
 
+    /** Windows 注册表主题值解析模式（预编译复用，避免每次轮询重复编译正则） */
+    private static final Pattern WIN_THEME_PATTERN =
+            Pattern.compile("AppsUseLightTheme\\s+REG_DWORD\\s+0x([0-9a-fA-F]+)");
+
     /** 读取 Windows 注册表 AppsUseLightTheme：0=深色模式，1=浅色模式（Win10 1809+） */
     private static boolean isWindowsDark() {
         String output = execCommand("reg", "query",
                 "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
                 "/v", "AppsUseLightTheme");
-        Matcher m = Pattern.compile("AppsUseLightTheme\\s+REG_DWORD\\s+0x([0-9a-fA-F]+)")
-                .matcher(output);
+        Matcher m = WIN_THEME_PATTERN.matcher(output);
         return m.find() && Integer.parseInt(m.group(1), 16) == 0;
     }
 
-    /** 执行外部命令并返回其标准输出（失败返回空串，最多等待 2 秒） */
+    /**
+     * 执行外部命令并返回其标准输出（失败返回空串，最多等待 2 秒）。
+     * 关键修复：显式关闭子进程的 stdin/stdout/stderr 流——否则管道句柄会随每次轮询不断堆积，
+     * 造成操作系统句柄/内存持续增长（"跟随系统"模式默认每 2 秒调用一次）。
+     */
     private static String execCommand(String... command) {
+        Process p = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
             pb.redirectErrorStream(true);
-            Process p = pb.start();
-            String output = new String(p.getInputStream().readAllBytes());
-            p.waitFor(2, TimeUnit.SECONDS);
-            p.destroyForcibly();
+            p = pb.start();
+            closeQuietly(p.getOutputStream()); // 关闭子进程标准输入，避免其等待输入而挂起
+            String output;
+            try (java.io.InputStream in = p.getInputStream()) {
+                output = new String(in.readAllBytes());
+            }
+            if (!p.waitFor(2, TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+            }
             return output;
         } catch (Exception e) {
             return "";
+        } finally {
+            if (p != null) {
+                // 兜底：关闭所有流并确保进程结束，彻底释放 OS 句柄资源
+                closeQuietly(p.getOutputStream());
+                closeQuietly(p.getErrorStream());
+                closeQuietly(p.getInputStream());
+                if (p.isAlive()) {
+                    p.destroyForcibly();
+                }
+            }
+        }
+    }
+
+    private static void closeQuietly(java.io.Closeable c) {
+        if (c != null) {
+            try {
+                c.close();
+            } catch (Exception ignore) {
+            }
         }
     }
 
@@ -653,7 +776,12 @@ public class SubnetGUI extends JFrame {
     private void setStatus(String msg, boolean isError) {
         if (isClosing || !isDisplayable()) return;
         statusLabel.setText(" " + msg);
-        statusLabel.setForeground(isError ? Color.RED : UIManager.getColor("Label.foreground"));
+        // 错误色跟随主题（FlatLaf 提供的语义错误色），暗色主题下自动调亮，避免硬编码红色对比度失衡
+        Color errorColor = UIManager.getColor("Component.error.focusedBorderColor");
+        if (errorColor == null) {
+            errorColor = new Color(220, 53, 69);
+        }
+        statusLabel.setForeground(isError ? errorColor : UIManager.getColor("Label.foreground"));
     }
     
     private void copyResults() {

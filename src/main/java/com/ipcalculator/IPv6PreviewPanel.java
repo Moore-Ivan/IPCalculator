@@ -3,6 +3,8 @@ package com.ipcalculator;
 import javax.swing.*;
 import javax.swing.border.Border;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.math.BigInteger;
@@ -25,16 +27,17 @@ public class IPv6PreviewPanel extends JPanel {
     private Border errorBorder;
     private JTextField boundTextField;
     private KeyAdapter boundKeyListener;
-    private java.awt.event.FocusAdapter boundFocusListener;
+    private FocusAdapter boundFocusListener;
     private Timer debounceTimer;
     private static final int DEBOUNCE_DELAY = 150;
+    /** 值列统一使用等宽字体：IPv6 地址分组对齐，避免长短不一造成的参差 */
+    private static final Font VALUE_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 12);
 
     public IPv6PreviewPanel() {
         setLayout(new BorderLayout());
 
-        previewArea = new JPanel(new GridLayout(6, 2, 8, 4));
+        previewArea = new JPanel(new GridBagLayout());
         previewArea.setBorder(BorderFactory.createTitledBorder("实时预览"));
-        previewArea.setEnabled(false);
         previewArea.setOpaque(true);
 
         normalBorder = previewArea.getBorder();
@@ -47,33 +50,24 @@ public class IPv6PreviewPanel extends JPanel {
             new Color(220, 53, 69)
         );
 
-        networkLabel = new JLabel("---");
-        prefixLabel = new JLabel("---");
-        maskLabel = new JLabel("---");
-        firstAddrLabel = new JLabel("---");
-        lastAddrLabel = new JLabel("---");
-        hostCountLabel = new JLabel("---");
-        addrTypeLabel = new JLabel("---");
-        anycastTypeLabel = new JLabel("---");
+        networkLabel = createValueLabel();
+        prefixLabel = createValueLabel();
+        maskLabel = createValueLabel();
+        firstAddrLabel = createValueLabel();
+        lastAddrLabel = createValueLabel();
+        hostCountLabel = createValueLabel();
+        addrTypeLabel = createValueLabel();
+        anycastTypeLabel = createValueLabel();
 
-        previewArea.add(new JLabel("网络地址:"));
-        previewArea.add(networkLabel);
-        previewArea.add(new JLabel("前缀长度:"));
-        previewArea.add(prefixLabel);
-        previewArea.add(new JLabel("子网掩码:"));
-        previewArea.add(maskLabel);
-        previewArea.add(new JLabel("首个可用地址:"));
-        previewArea.add(firstAddrLabel);
-        previewArea.add(new JLabel("最后可用地址:"));
-        previewArea.add(lastAddrLabel);
-        previewArea.add(new JLabel("可用主机数:"));
-        previewArea.add(hostCountLabel);
-        previewArea.add(new JLabel("地址类型:"));
-        previewArea.add(addrTypeLabel);
-        previewArea.add(new JLabel("任播类型:"));
-        previewArea.add(anycastTypeLabel);
+        // 2 列 × 4 行成对排布：横向利用空间、纵向高度减半，
+        // 避免预览区过高而把下方"输出结果"区在 BorderLayout 中被挤压到只剩一行
+        addPreviewPair(0, "网络地址:", networkLabel, "前缀长度:", prefixLabel);
+        addPreviewPair(1, "首个可用地址:", firstAddrLabel, "最后可用地址:", lastAddrLabel);
+        addPreviewPair(2, "子网掩码:", maskLabel, "可用主机数:", hostCountLabel);
+        addPreviewPair(3, "地址类型:", addrTypeLabel, "任播类型:", anycastTypeLabel);
 
-        add(previewArea, BorderLayout.CENTER);
+        // 顶部对齐、按内容紧凑排布，避免行被垂直拉伸造成大片空白
+        add(previewArea, BorderLayout.NORTH);
 
         debounceTimer = new Timer(DEBOUNCE_DELAY, e -> {
             if (boundTextField != null) {
@@ -83,6 +77,46 @@ public class IPv6PreviewPanel extends JPanel {
         debounceTimer.setRepeats(false);
     }
 
+    private JLabel createValueLabel() {
+        JLabel label = new JLabel("---");
+        label.setFont(VALUE_FONT);
+        return label;
+    }
+
+    /** 添加一行两对"标签: 值"：标签列右对齐、值列左对齐并占满各自列宽 */
+    private void addPreviewPair(int row, String label1, JLabel value1, String label2, JLabel value2) {
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridy = row;
+        c.anchor = GridBagConstraints.EAST;
+        c.insets = new Insets(2, 8, 2, 4);
+
+        c.gridx = 0;
+        c.weightx = 0;
+        previewArea.add(new JLabel(label1), c);
+
+        c.gridx = 1;
+        c.weightx = 1.0;
+        c.anchor = GridBagConstraints.WEST;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.insets = new Insets(2, 0, 2, 16);
+        previewArea.add(value1, c);
+
+        c.gridx = 2;
+        c.weightx = 0;
+        c.anchor = GridBagConstraints.EAST;
+        c.fill = GridBagConstraints.NONE;
+        c.insets = new Insets(2, 8, 2, 4);
+        previewArea.add(new JLabel(label2), c);
+
+        c.gridx = 3;
+        c.weightx = 1.0;
+        c.anchor = GridBagConstraints.WEST;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.insets = new Insets(2, 0, 2, 8);
+        previewArea.add(value2, c);
+    }
+
+    /** 绑定到输入框：仅在此处注册监听器一次，避免重复绑定造成监听器累积 */
     public void bindToTextField(JTextField textField) {
         if (boundTextField != null && boundKeyListener != null) {
             boundTextField.removeKeyListener(boundKeyListener);
@@ -97,9 +131,9 @@ public class IPv6PreviewPanel extends JPanel {
                 debounceTimer.restart();
             }
         };
-        boundFocusListener = new java.awt.event.FocusAdapter() {
+        boundFocusListener = new FocusAdapter() {
             @Override
-            public void focusLost(java.awt.event.FocusEvent e) {
+            public void focusLost(FocusEvent e) {
                 debounceTimer.stop();
                 updatePreview(textField.getText());
             }
@@ -146,7 +180,7 @@ public class IPv6PreviewPanel extends JPanel {
 
             networkLabel.setText(IPv6Calculator.formatCompressed(network) + "/" + prefix);
             prefixLabel.setText("/" + prefix);
-            maskLabel.setText(truncateMiddle(IPv6Calculator.formatFull(mask), 30));
+            maskLabel.setText(IPv6Calculator.formatFull(mask));
             firstAddrLabel.setText(prefix < 128 ? IPv6Calculator.formatCompressed(network.add(BigInteger.ONE)) : IPv6Calculator.formatCompressed(network));
             lastAddrLabel.setText(prefix < 128 ? IPv6Calculator.formatCompressed(last) : "N/A");
             hostCountLabel.setText(truncateNumber(hosts));
@@ -158,12 +192,6 @@ public class IPv6PreviewPanel extends JPanel {
         } catch (IllegalArgumentException e) {
             showError(e.getMessage());
         }
-    }
-
-    private String truncateMiddle(String text, int maxLen) {
-        if (text == null || text.length() <= maxLen) return text;
-        int half = (maxLen - 3) / 2;
-        return text.substring(0, half) + "..." + text.substring(text.length() - half);
     }
 
     private String truncateNumber(BigInteger num) {
@@ -210,25 +238,12 @@ public class IPv6PreviewPanel extends JPanel {
     }
 
     @Override
-    public void addNotify() {
-        super.addNotify();
-        // 重新绑定监听器（当面板重新显示时）
-        if (boundTextField != null && boundKeyListener != null) {
-            boundTextField.addKeyListener(boundKeyListener);
-            boundTextField.addFocusListener(boundFocusListener);
-        }
-    }
-    
-    @Override
     public void removeNotify() {
         super.removeNotify();
+        // 面板离开显示层级时停止防抖定时器；
+        // 保留定时器与监听器实例，避免下次显示时重复注册监听器或出现定时器为 null 的空指针
         if (debounceTimer != null) {
             debounceTimer.stop();
-            debounceTimer = null;
-        }
-        if (boundTextField != null && boundKeyListener != null) {
-            boundTextField.removeKeyListener(boundKeyListener);
-            boundTextField.removeFocusListener(boundFocusListener);
         }
     }
 }

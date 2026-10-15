@@ -65,8 +65,10 @@
 - 🎭 **掩码转换器** —— CIDR 前缀 ↔ 点分十进制掩码 ↔ 反掩码互转
 - 📋 **输入历史记录** —— 自动保存近期输入，可一键清除
 - 📊 **内存监控** —— 实时显示 JVM 内存占用
-- 🌗 **明暗双主题** —— 基于 FlatLaf 的亮色 / 暗色主题切换
+- 🌗 **三模式主题** —— 基于 FlatLaf，支持跟随系统 / 亮色 / 暗色三种模式（F2 循环切换）；跟随系统时自动同步 Windows / macOS / Linux 的系统深浅色并即时切换
 - 🖥️ **全屏模式** —— 支持一键切换全屏（F11 独占全屏，不修改窗口装饰）
+- ⚡ **启动加速** —— 标签页懒加载，仅构建首屏可见面板，其余面板首次切换时按需创建
+- 🚦 **防重复操作** —— 计算期间自动禁用触发按钮；快速计算不弹窗，长任务延迟 300ms 才显示进度对话框，支持 Esc 取消
 - 🔄 **在线更新** —— 自动检查 GitHub Release 新版本，支持实时下载速率/剩余时间显示、后台下载不阻塞主窗口、一键取消
 
 ## ⌨️ 快捷键
@@ -74,7 +76,7 @@
 | 快捷键        | 功能          |
 | ---------- | ----------- |
 | `F1`       | 打开快捷键说明     |
-| `F2`       | 切换暗色 / 亮色模式 |
+| `F2`       | 循环切换主题：跟随系统 → 亮色 → 暗色 |
 | `F3`       | 打开进制转换器     |
 | `F4`       | 打开掩码转换器     |
 | `F9`       | 检查更新        |
@@ -82,7 +84,9 @@
 | `F11`      | 切换全屏模式      |
 | `Ctrl + L` | 清空结果区域      |
 | `Ctrl + C` | 复制结果到剪贴板    |
+| `Ctrl + PageUp / PageDown` | 在六大功能分组间快速切换 |
 | `Enter`    | 在输入框中执行计算   |
+| `Esc`      | 取消正在执行的计算   |
 
 ## 🛠️ 技术栈
 
@@ -94,6 +98,29 @@
 - **打包工具**：Jpackage（生成原生安装包）
 
 ## 📦 项目结构
+
+```
+IPCalculator/
+├── build.gradle                 # 构建脚本：依赖、版本号、Shadow Jar、jpackage 打包
+├── src/main/java/com/ipcalculator/
+│   ├── SubnetGUI.java           # 主窗口：标签页懒加载、主题管理、全局快捷键、状态栏
+│   ├── SubnetController.java    # 控制器：统一调度 Service 与 UI 回调
+│   ├── SubnetCalculator.java    # IPv4 核心算法（纯静态，无 UI 依赖）
+│   ├── IPv6Calculator.java      # IPv6 核心算法（纯静态，无 UI 依赖）
+│   ├── service/                 # Service 层：输入校验 + 结果转换
+│   │   ├── IPv4SubnetService.java
+│   │   └── IPv6SubnetService.java
+│   ├── *Panel.java              # 19 个业务面板：IPv4/IPv6 各功能的输入与展示
+│   ├── CalculationWorker.java   # 异步计算封装（SwingWorker）：延迟进度窗、防重复、Esc 取消
+│   ├── ConfigStore.java         # 配置持久化（Gson JSON）：主题模式、输入历史、列宽记忆
+│   ├── UpdateChecker.java       # GitHub Releases 在线更新
+│   ├── HistoryComboBox.java     # 带历史记录下拉的输入框
+│   ├── ResultTablePanel.java    # 文本结果表格（双击复制 / 右键导出 CSV）
+│   ├── SubnetTablePanel.java    # 子网列表表格（排序 / 分页 / 大数据量流式加载）
+│   ├── ErrorIndicator.java      # 输入错误指示器（红框 + 悬浮提示）
+│   └── ...                      # 校验器、进制/掩码转换器、快捷键说明等辅助组件
+└── src/test/java/               # JUnit 测试（核心算法）
+```
 
 ## 🚀 快速开始
 

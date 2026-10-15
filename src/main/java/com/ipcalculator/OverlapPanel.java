@@ -66,7 +66,7 @@ public class OverlapPanel extends BaseOperationPanel {
         btnDetect.addActionListener(e -> {
             txtCidrs.save();
             String input = txtCidrs.getText().trim();
-            CalculationWorker.executeWithProgress(this, "正在检测网段冲突...",
+            CalculationWorker.executeWithProgress(this, "正在检测网段冲突...", btnDetect,
                 new CalculationWorker.CallableWithProgress<String>() {
                     private CalculationWorker.ProgressHandler handler;
                     @Override

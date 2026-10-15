@@ -18,6 +18,8 @@ public class EqualSubnetPanel extends BaseOperationPanel {
     private HistoryComboBox txtMajorCidr;
     private HistoryComboBox txtSubnetCount;
     private HistoryComboBox txtHostPerSubnet;
+    private JButton btnByCount;
+    private JButton btnByHosts;
     private ErrorIndicator cidrError;
     private ErrorIndicator countError;
     private ErrorIndicator hostsError;
@@ -39,8 +41,8 @@ public class EqualSubnetPanel extends BaseOperationPanel {
         txtMajorCidr = new HistoryComboBox("cidr_equal_subnet", 220);
         txtSubnetCount = new HistoryComboBox("count_equal_subnet", 80);
         txtHostPerSubnet = new HistoryComboBox("hosts_equal_subnet", 80);
-        JButton btnByCount = new JButton("按数量划分");
-        JButton btnByHosts = new JButton("按主机数划分");
+        btnByCount = new JButton("按数量划分");
+        btnByHosts = new JButton("按主机数划分");
         JButton exampleBtn = new JButton("示例");
         JButton clearBtn = new JButton("清空");
 
@@ -112,7 +114,7 @@ public class EqualSubnetPanel extends BaseOperationPanel {
         clearErrors(cidrError, countError, hostsError);
         String cidr = txtMajorCidr.getText().trim();
         String countStr = txtSubnetCount.getText().trim();
-        CalculationWorker.executeWithProgress(this, "正在按数量划分子网...",
+        CalculationWorker.executeWithProgress(this, "正在按数量划分子网...", btnByCount,
             new CalculationWorker.CallableWithProgress<List<SubnetTablePanel.SubnetRow>>() {
                 private CalculationWorker.ProgressHandler handler;
                 @Override
@@ -149,7 +151,7 @@ public class EqualSubnetPanel extends BaseOperationPanel {
         clearErrors(cidrError, countError, hostsError);
         String cidr = txtMajorCidr.getText().trim();
         String hostStr = txtHostPerSubnet.getText().trim();
-        CalculationWorker.executeWithProgress(this, "正在按主机数划分子网...",
+        CalculationWorker.executeWithProgress(this, "正在按主机数划分子网...", btnByHosts,
             new CalculationWorker.CallableWithProgress<IPv4SubnetService.SubnetByHostsResultEx>() {
                 private CalculationWorker.ProgressHandler handler;
                 @Override
