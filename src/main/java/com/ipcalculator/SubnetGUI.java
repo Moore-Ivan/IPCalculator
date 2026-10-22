@@ -543,7 +543,11 @@ public class SubnetGUI extends JFrame {
 
     // ========== 系统深浅色检测（跟随系统模式） ==========
 
-    /** 启动后台检测线程，每 2 秒检测一次系统深浅色；仅跟随系统模式下自动切换主题 */
+    /**
+     * 启动后台检测线程，每 10 秒检测一次系统深浅色；仅跟随系统模式下自动切换主题。
+     * 注意：每次检测需启动 reg query 外部进程，频率过高会持续制造短寿对象、推高堆占用，
+     * 因此间隔取 10 秒（主题跟随延迟无感知），且窗口不可见时跳过检测。
+     */
     private void startSystemThemeWatcher() {
         if (systemThemeWatcher != null) {
             return;
@@ -552,12 +556,16 @@ public class SubnetGUI extends JFrame {
             boolean lastDark = isSystemDark();
             while (true) {
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(10_000);
                 } catch (InterruptedException e) {
                     return;
                 }
                 // 非跟随系统模式时不检测，避免无谓的系统调用开销
                 if (!"system".equals(themeMode)) {
+                    continue;
+                }
+                // 窗口最小化/不可见时跳过检测，恢复可见后下一轮（≤10s）自动补检
+                if (!isShowing()) {
                     continue;
                 }
                 boolean dark = isSystemDark();
