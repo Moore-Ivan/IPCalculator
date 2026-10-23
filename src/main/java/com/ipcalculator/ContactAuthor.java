@@ -532,7 +532,7 @@ public class ContactAuthor {
 "                    </div>\n" +
 "                    <div class=\"item-content\">\n" +
 "                        <div class=\"label\">邮箱</div>\n" +
-"                        <span><a href=\"mailto:Qianhe_Ivan@outlook.com\">Qianhe_Ivan@outlook.com</a></span>\n" +
+"                        <span><a href=\"mailto:Moore_Ivan@foxmail.com\">Moore_Ivan@foxmail.com</a></span>\n" +
 "                    </div>\n" +
 "                </div>\n" +
 "            </section>\n" +
