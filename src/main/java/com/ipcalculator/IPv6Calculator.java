@@ -326,8 +326,20 @@ public class IPv6Calculator {
         return getNetworkAddress(addr, prefix).or(wildcard);
     }
 
-    /** 可用主机数 */
+    /**
+     * 可用主机数。
+     * 口径说明（有意如此，非疏漏）：
+     * - 常规前缀：地址总数减 1，即扣除 Subnet-Router anycast（子网前缀+全零，RFC 4291 §2.6.1 保留）；
+     * - /127：返回 2——RFC 6164 规定 /127 仅用于点对点链路，两个地址均可分配，
+     *   Subnet-Router anycast 不适用于 /127；
+     * - /128：返回 1——单个主机地址，无任播保留。
+     * 因此 /128→1、/127→2、/126→3 是 RFC 语义下的正确序列，/126 与 /127 之间的
+     * "跳跃"来自 /127 的特殊豁免，而非口径不一致。
+     */
     public static BigInteger getUsableHostCount(int prefix) {
+        if (prefix < 0 || prefix > 128) {
+            throw new IllegalArgumentException("前缀必须在 0-128 之间: " + prefix);
+        }
         if (prefix == 128) return BigInteger.ONE;
         if (prefix == 127) return BigInteger.valueOf(2);
         return BigInteger.ONE.shiftLeft(128 - prefix).subtract(BigInteger.ONE);

@@ -30,6 +30,8 @@ public class ConfigStore {
     private static volatile boolean loadFailed = false;
     // 统一锁对象，保护所有 historyMap 操作的原子性
     private static final Object historyLock = new Object();
+    // "历史已全部清除"通知监听器（如 HistoryComboBox 用于刷新自身下拉列表）
+    private static final CopyOnWriteArrayList<Runnable> historyClearListeners = new CopyOnWriteArrayList<>();
     
     // Gson 实例，配置为美化输出便于人工阅读
     private static final Gson gson = new GsonBuilder()
@@ -259,12 +261,13 @@ public class ConfigStore {
         }
         saveHistory();
     }
-    
+
     public static void clearAllHistory() {
         synchronized (historyLock) {
             historyMap.clear();
         }
         saveHistory();
+        fireHistoryCleared();
     }
 
     /**
@@ -275,6 +278,30 @@ public class ConfigStore {
             historyMap.clear();
         }
         saveHistory();
+        fireHistoryCleared();
+    }
+
+    // ========== 历史清除监听 ==========
+
+    /** 注册"历史已全部清除"监听器，用于让已存在的输入框实例立即刷新下拉列表 */
+    public static void addHistoryClearListener(Runnable listener) {
+        if (listener != null) {
+            historyClearListeners.addIfAbsent(listener);
+        }
+    }
+
+    public static void removeHistoryClearListener(Runnable listener) {
+        historyClearListeners.remove(listener);
+    }
+
+    private static void fireHistoryCleared() {
+        for (Runnable listener : historyClearListeners) {
+            try {
+                listener.run();
+            } catch (Exception e) {
+                System.err.println("ConfigStore: 历史清除监听器执行失败: " + e.getMessage());
+            }
+        }
     }
     
     // ========== 列宽保存 ==========
@@ -294,13 +321,18 @@ public class ConfigStore {
             return defaults;
         }
         String[] parts = value.split(",");
-        int[] widths = new int[Math.min(parts.length, defaults.length)];
-        for (int i = 0; i < widths.length; i++) {
-            try {
-                widths[i] = Integer.parseInt(parts[i]);
-            } catch (NumberFormatException e) {
-                widths[i] = defaults[i];
+        // 返回数组始终与 defaults 等长：配置项缺失或损坏时用默认值填充，
+        // 避免调用方按 defaults 长度索引时出现 ArrayIndexOutOfBoundsException
+        int[] widths = new int[defaults.length];
+        for (int i = 0; i < defaults.length; i++) {
+            if (i < parts.length) {
+                try {
+                    widths[i] = Integer.parseInt(parts[i]);
+                    continue;
+                } catch (NumberFormatException ignored) {
+                }
             }
+            widths[i] = defaults[i];
         }
         return widths;
     }

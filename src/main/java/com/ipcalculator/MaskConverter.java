@@ -98,9 +98,9 @@ public class MaskConverter extends JDialog {
 
         mainPanel.add(inputPanel, BorderLayout.CENTER);
 
-        // 错误提示
+        // 错误提示（错误红字使用 FlatLaf 语义错误色，暗色主题下自动调亮）
         errorLabel = new JLabel("");
-        errorLabel.setForeground(Color.RED);
+        errorLabel.setForeground(getThemeErrorColor());
         errorLabel.setFont(errorLabel.getFont().deriveFont(12f));
         errorLabel.setHorizontalAlignment(SwingConstants.CENTER);
         mainPanel.add(errorLabel, BorderLayout.SOUTH);
@@ -278,6 +278,23 @@ public class MaskConverter extends JDialog {
         }
     }
 
+    /** 主题感知的错误色：优先 FlatLaf 语义错误色，回退红色 */
+    private static Color getThemeErrorColor() {
+        Color c = UIManager.getColor("Component.error.focusedBorderColor");
+        return c != null ? c : Color.RED;
+    }
+
+    /** 统一设置提示消息：错误用错误色，成功/清空用正常前景色（修复成功消息显示为红色的问题） */
+    private void setMessage(String msg, boolean isError) {
+        errorLabel.setText(msg);
+        if (isError) {
+            errorLabel.setForeground(getThemeErrorColor());
+        } else {
+            Color normal = UIManager.getColor("Label.foreground");
+            errorLabel.setForeground(normal != null ? normal : Color.BLACK);
+        }
+    }
+
     /**
      * 统一设置字段值
      * @param source 触发来源 (SOURCE_DECIMAL / SOURCE_BINARY / SOURCE_PREFIX)
@@ -304,7 +321,7 @@ public class MaskConverter extends JDialog {
                         binaryMaskField.setText("");
                         break;
                 }
-                errorLabel.setText(error);
+                setMessage(error, true);
                 return;
             }
 
@@ -314,7 +331,7 @@ public class MaskConverter extends JDialog {
                 decimalMaskField.setText("");
                 binaryMaskField.setText("");
                 prefixField.setText("");
-                errorLabel.setText("");
+                setMessage("", false);
                 return;
             }
 
@@ -332,7 +349,7 @@ public class MaskConverter extends JDialog {
                     binaryMaskField.setText(val2);
                     break;
             }
-            errorLabel.setText("");
+            setMessage("", false);
         } finally {
             isUpdating = false;
         }
@@ -446,12 +463,12 @@ public class MaskConverter extends JDialog {
 
     private void copyToClipboard(String text) {
         if (text == null || text.isEmpty()) {
-            errorLabel.setText("没有可复制的内容");
+            setMessage("没有可复制的内容", true);
             return;
         }
         java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
             .setContents(new java.awt.datatransfer.StringSelection(text), null);
-        errorLabel.setText("已复制到剪贴板");
+        setMessage("已复制到剪贴板", false);
     }
 
     private void clearAll() {

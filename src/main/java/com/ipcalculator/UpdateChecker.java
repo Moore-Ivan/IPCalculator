@@ -60,7 +60,28 @@ public final class UpdateChecker {
         return t;
     });
 
+    /** 已转入后台的下载进度窗口：主窗口"检查更新"按钮据此恢复显示，避免后台下载后无入口查看进度 */
+    private static volatile javax.swing.JDialog backgroundedDownloadDialog;
+    /** 下载是否处于后台模式（downloadAndInstall 中的 backgrounded 即本对象的别名） */
+    private static final java.util.concurrent.atomic.AtomicBoolean downloadBackgrounded =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     private UpdateChecker() {
+    }
+
+    /**
+     * 若存在已转入后台的下载进度窗口，则重新显示并返回 true；否则返回 false。
+     * 主窗口"检查更新"按钮优先调用本方法，让用户能够重新查看后台下载进度。
+     */
+    public static boolean restoreBackgroundDownload() {
+        javax.swing.JDialog d = backgroundedDownloadDialog;
+        if (d == null || !d.isDisplayable()) {
+            return false;
+        }
+        downloadBackgrounded.set(false);
+        backgroundedDownloadDialog = null;
+        d.setVisible(true);
+        return true;
     }
 
     public static final class UpdateInfo {
@@ -297,7 +318,8 @@ public final class UpdateChecker {
         // 跨线程共享的下载状态: [0]=已下载字节 [1]=总字节
         final long[] dlState = new long[]{0, -1};
         final AtomicBoolean cancelled = new AtomicBoolean(false);
-        final AtomicBoolean backgrounded = new AtomicBoolean(false);
+        // 指向类级 downloadBackgrounded，restoreBackgroundDownload 恢复窗口时能同步清除后台状态
+        final AtomicBoolean backgrounded = downloadBackgrounded;
         final HttpURLConnection[] connRef = new HttpURLConnection[1];
 
         // 速率采样定时器（EDT, 每 500ms）——独立于下载循环，保证恒定刷新频率
@@ -330,8 +352,9 @@ public final class UpdateChecker {
         // 后台下载（按钮或关闭窗口）→ 隐藏对话框，下载继续
         Runnable goBackground = () -> {
             backgrounded.set(true);
+            backgroundedDownloadDialog = dialog; // 记录窗口，供"检查更新"恢复显示
             dialog.setVisible(false);
-            statusCallback.accept("已转入后台下载，可继续使用程序");
+            statusCallback.accept("已转入后台下载，可继续使用程序（点击\"检查更新\"可恢复进度窗口）");
         };
         bgBtn.addActionListener(e -> goBackground.run());
         dialog.addWindowListener(new java.awt.event.WindowAdapter() {
@@ -344,6 +367,7 @@ public final class UpdateChecker {
             cancelled.set(true);
             if (connRef[0] != null) { try { connRef[0].disconnect(); } catch (Exception ignored) {} }
             speedTimer.stop();
+            backgroundedDownloadDialog = null;
             dialog.dispose();
             statusCallback.accept("已取消更新下载");
         });
@@ -414,6 +438,7 @@ public final class UpdateChecker {
                 }
 
                 speedTimer.stop();
+                backgroundedDownloadDialog = null; // 下载结束，"检查更新"不再恢复此窗口
                 final Path installerPath = target;
                 if (backgrounded.get()) {
                     // 后台完成 → 通知用户并询问是否立即安装
@@ -455,6 +480,7 @@ public final class UpdateChecker {
                 }
             } catch (Exception ex) {
                 speedTimer.stop();
+                backgroundedDownloadDialog = null;
                 Path toDelete = tempFile;
                 SwingUtilities.invokeLater(() -> {
                     if (!cancelled.get()) {

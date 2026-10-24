@@ -48,7 +48,9 @@ public class ContactAuthor {
             if (os.contains("windows")) {
                 try {
                     String path = tempFile.toAbsolutePath().toString();
-                    Runtime.getRuntime().exec(new String[]{"cmd", "/c", "start", "\"\"", path});
+                    // ProcessBuilder + 独立的空标题参数（start 的第一个引号参数是窗口标题），
+                    // 路径含空格时由 ProcessBuilder 自动加引号，避免被 cmd 元字符（& ^ | 等）干扰
+                    new ProcessBuilder("cmd", "/c", "start", "\"\"", path).start();
                     Thread deleteThread = new Thread(() -> {
                         try {
                             Thread.sleep(DELETE_DELAY_MS);

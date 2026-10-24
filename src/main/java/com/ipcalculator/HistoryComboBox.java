@@ -26,7 +26,14 @@ public class HistoryComboBox extends JComboBox<String> {
         setPreferredSize(new java.awt.Dimension(preferredWidth, 26));
         loadHistory();
         savedValue = getText();
-        setupListeners();
+        registerListeners();
+        // 注册"全部历史已清除"通知，保证清除历史后已存在的实例立即刷新下拉列表
+        ConfigStore.addHistoryClearListener(this::onHistoryCleared);
+    }
+
+    /** 清除全部历史后的回调：清空下拉项，保留编辑器中用户正在输入的文本 */
+    private void onHistoryCleared() {
+        removeAllItems();
     }
     
     private void loadHistory() {
@@ -37,47 +44,66 @@ public class HistoryComboBox extends JComboBox<String> {
         }
     }
     
-    private void setupListeners() {
+    /**
+     * 注册动作/焦点监听器（幂等）。
+     * 在构造和 addNotify（组件重新加入显示层级）时调用，
+     * 修复 removeNotify 移除监听器后组件重新显示时监听器永久丢失的问题。
+     */
+    private void registerListeners() {
+        if (actionListener != null && focusListener != null) {
+            return; // 已注册，避免重复累积
+        }
         final WeakReference<HistoryComboBox> weakThis = new WeakReference<>(this);
-        
-        actionListener = e -> {
-            HistoryComboBox comboBox = weakThis.get();
-            if (comboBox != null && !comboBox.programmaticallyUpdating.get()) {
-                Object selected = comboBox.getSelectedItem();
-                if (selected != null) {
-                    String selectedText = selected.toString();
-                    comboBox.savedValue = selectedText.trim();
-                    if (!selectedText.trim().isEmpty()) {
-                        comboBox.programmaticallyUpdating.set(true);
-                        try {
-                            ConfigStore.addHistory(comboBox.fieldName, selectedText.trim());
-                            comboBox.addToDropdown(selectedText.trim());
-                        } finally {
-                            comboBox.programmaticallyUpdating.set(false);
+
+        if (actionListener == null) {
+            actionListener = e -> {
+                HistoryComboBox comboBox = weakThis.get();
+                if (comboBox != null && !comboBox.programmaticallyUpdating.get()) {
+                    Object selected = comboBox.getSelectedItem();
+                    if (selected != null) {
+                        String selectedText = selected.toString();
+                        comboBox.savedValue = selectedText.trim();
+                        if (!selectedText.trim().isEmpty()) {
+                            comboBox.programmaticallyUpdating.set(true);
+                            try {
+                                ConfigStore.addHistory(comboBox.fieldName, selectedText.trim());
+                                comboBox.addToDropdown(selectedText.trim());
+                            } finally {
+                                comboBox.programmaticallyUpdating.set(false);
+                            }
                         }
                     }
                 }
-            }
-        };
-        addActionListener(actionListener);
-        
-        JTextField editor = (JTextField) getEditor().getEditorComponent();
-        focusListener = new FocusAdapter() {
-            @Override
-            public void focusLost(FocusEvent e) {
-                HistoryComboBox comboBox = weakThis.get();
-                if (comboBox != null) {
-                    // 保存用户当前输入的文本
-                    String currentText = editor.getText();
-                    comboBox.saveIfChanged();
-                    // 恢复用户输入的文本，防止模型变更导致输入丢失
-                    editor.setText(currentText);
+            };
+            addActionListener(actionListener);
+        }
+
+        if (focusListener == null) {
+            JTextField editor = (JTextField) getEditor().getEditorComponent();
+            focusListener = new FocusAdapter() {
+                @Override
+                public void focusLost(FocusEvent e) {
+                    HistoryComboBox comboBox = weakThis.get();
+                    if (comboBox != null) {
+                        // 保存用户当前输入的文本
+                        String currentText = editor.getText();
+                        comboBox.saveIfChanged();
+                        // 恢复用户输入的文本，防止模型变更导致输入丢失
+                        editor.setText(currentText);
+                    }
                 }
-            }
-        };
-        editor.addFocusListener(focusListener);
+            };
+            editor.addFocusListener(focusListener);
+        }
     }
-    
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        // 组件重新加入显示层级时恢复监听器（与 removeNotify 配对）
+        registerListeners();
+    }
+
     @Override
     public void removeNotify() {
         super.removeNotify();
@@ -166,8 +192,12 @@ public class HistoryComboBox extends JComboBox<String> {
     }
     
     public String getText() {
-        JTextField editor = (JTextField) getEditor().getEditorComponent();
-        return editor.getText();
+        // 防御性检查：编辑器组件理论上不为 null，但避免异常 L&F 下的 NPE
+        if (getEditor() != null && getEditor().getEditorComponent() instanceof JTextField editor) {
+            return editor.getText();
+        }
+        Object selected = getSelectedItem();
+        return selected != null ? selected.toString() : "";
     }
     
     public void setText(String text) {

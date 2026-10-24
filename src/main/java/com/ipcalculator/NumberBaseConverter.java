@@ -144,13 +144,17 @@ public class NumberBaseConverter extends JDialog {
         });
     }
 
+    /** 默认下拉索引：十进制（BASES[2]）转二进制（BASES[0]） */
+    private static final int DEFAULT_FROM_INDEX = 2;
+    private static final int DEFAULT_TO_INDEX = 0;
+
     private void loadSavedValues() {
         String savedInput = ConfigStore.getSetting("base_converter.input", "");
         // 使用带默认值/边界检查的读取，防止配置损坏导致窗口无法打开
-        int savedFromBase = ConfigStore.getSetting("base_converter.from_base", 2);
-        int savedToBase = ConfigStore.getSetting("base_converter.to_base", 0);
-        if (savedFromBase < 0 || savedFromBase >= BASES.length) savedFromBase = 2;
-        if (savedToBase < 0 || savedToBase >= BASES.length) savedToBase = 0;
+        int savedFromBase = ConfigStore.getSetting("base_converter.from_base", DEFAULT_FROM_INDEX);
+        int savedToBase = ConfigStore.getSetting("base_converter.to_base", DEFAULT_TO_INDEX);
+        if (savedFromBase < 0 || savedFromBase >= BASES.length) savedFromBase = DEFAULT_FROM_INDEX;
+        if (savedToBase < 0 || savedToBase >= BASES.length) savedToBase = DEFAULT_TO_INDEX;
 
         inputField.setText(savedInput);
         fromBaseCombo.setSelectedIndex(savedFromBase);
@@ -195,7 +199,8 @@ public class NumberBaseConverter extends JDialog {
                 result = formatBinary(result);
             } else if (toBase == 16) {
                 result = "0x" + result;
-            } else if (toBase == 8) {
+            } else if (toBase == 8 && !result.equals("0")) {
+                // 值为 0 时直接输出 "0"，避免加前缀后输出费解的 "00"
                 result = "0" + result;
             }
 

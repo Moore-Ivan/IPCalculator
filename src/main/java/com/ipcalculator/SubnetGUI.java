@@ -119,6 +119,7 @@ public class SubnetGUI extends JFrame {
         clearHistoryBtn.setToolTipText("清除所有输入框历史记录");
         clearHistoryBtn.addActionListener(e -> {
             ConfigStore.clearAllInputHistory();
+            // 各 HistoryComboBox 通过历史清除监听器即时刷新下拉列表
             setStatus("已清除所有输入历史");
         });
 
@@ -136,7 +137,7 @@ public class SubnetGUI extends JFrame {
             MaskConverter.showConverter(this);
         });
 
-        themeBtn = new JButton("跟随系统");
+        themeBtn = new JButton("切换到亮色");
         themeBtn.setToolTipText("切换主题模式：跟随系统 → 亮色 → 暗色（F2）");
         themeBtn.addActionListener(e -> toggleTheme());
 
@@ -144,6 +145,11 @@ public class SubnetGUI extends JFrame {
         updateBtn.setToolTipText("检查是否有新版本 (F9)");
         updateBtn.setMnemonic(KeyEvent.VK_U);
         updateBtn.addActionListener(e -> {
+            // 若更新下载已转入后台，点击"检查更新"恢复显示下载进度窗口
+            if (UpdateChecker.restoreBackgroundDownload()) {
+                setStatus("已恢复下载进度窗口");
+                return;
+            }
             setStatus("正在检查更新...");
             UpdateChecker.checkAsync(SubnetGUI.this, true, SubnetGUI.this::setStatus);
         });
@@ -639,7 +645,7 @@ public class SubnetGUI extends JFrame {
     /**
      * 执行外部命令并返回其标准输出（失败返回空串，最多等待 2 秒）。
      * 关键修复：显式关闭子进程的 stdin/stdout/stderr 流——否则管道句柄会随每次轮询不断堆积，
-     * 造成操作系统句柄/内存持续增长（"跟随系统"模式默认每 2 秒调用一次）。
+     * 造成操作系统句柄/内存持续增长（"跟随系统"模式下主题检测线程每 10 秒调用一次，窗口不可见时跳过）。
      */
     private static String execCommand(String... command) {
         Process p = null;
@@ -732,15 +738,17 @@ public class SubnetGUI extends JFrame {
 
     private void updateThemeButtonText() {
         if (themeBtn != null) {
+            // 按钮文字统一表示"点击后将切换到的目标模式"，语义一致：
+            // system → 亮色，light → 暗色，dark → 跟随系统（切换循环见 toggleTheme）
             switch (themeMode) {
                 case "dark":
-                    themeBtn.setText("亮色模式");
+                    themeBtn.setText("切换到跟随系统");
                     break;
                 case "light":
-                    themeBtn.setText("暗色模式");
+                    themeBtn.setText("切换到暗色");
                     break;
                 case "system":
-                    themeBtn.setText("跟随系统");
+                    themeBtn.setText("切换到亮色");
                     break;
                 default:
                     themeBtn.setText("主题");
@@ -847,15 +855,16 @@ public class SubnetGUI extends JFrame {
     // ========== Main ==========
 
     public static void main(String[] args) {
-        try {
-            // 按"跟随系统/亮色/暗色"模式应用主题（system 模式下自动检测系统深浅色）
-            applyThemeForMode(ConfigStore.getThemeMode());
-        } catch (Exception ex) {
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception ignored) {}
-        }
         SwingUtilities.invokeLater(() -> {
+            try {
+                // 按"跟随系统/亮色/暗色"模式应用主题（system 模式下自动检测系统深浅色）。
+                // Swing 规定 LookAndFeel 必须在 EDT 上设置，因此移入 invokeLater 内
+                applyThemeForMode(ConfigStore.getThemeMode());
+            } catch (Exception ex) {
+                try {
+                    UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+                } catch (Exception ignored) {}
+            }
             SubnetGUI gui = new SubnetGUI();
             gui.setVisible(true);
             // 启动后自动检查更新 (每 24 小时最多一次，仅在发现新版本时弹窗)

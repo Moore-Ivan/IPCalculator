@@ -118,7 +118,9 @@ public class RangeToCidrPanel extends BaseOperationPanel {
                     }
                     @Override
                     public void onError(Exception ex) {
-                        handleError(ex, startError, txtStart);
+                        // IP_END 错误归属到结束 IP 输入框，其余（如 IP_START）归属起始 IP
+                        handleValidationError(ex, startError, endError, txtStart, txtEnd,
+                            ValidationError.Field.IP_END);
                     }
                 }
             );

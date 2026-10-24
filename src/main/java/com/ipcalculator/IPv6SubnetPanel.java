@@ -142,7 +142,8 @@ public class IPv6SubnetPanel extends BaseOperationPanel {
                 clearErrors(cidrError, prefixError, countError);
 
                 java.math.BigInteger totalCount = SubnetController.getIPv6SubnetCount(cidr, newPrefix);
-                final int pageSize = 100;
+                // 复用 SubnetTablePanel 的默认页大小，避免硬编码与面板 pageSize 脱节
+                final int pageSize = SubnetTablePanel.DEFAULT_PAGE_SIZE;
 
                 // 统一强制使用分页模式加载，不再提供"一次性加载全部"路径，彻底避免 OOM 风险
                 statusCallback.accept("正在计算，总计 " + totalCount + " 个子网，使用分页加载...");

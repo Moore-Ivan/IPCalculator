@@ -16,12 +16,15 @@ public class SubnetCalculator {
 
     // ---------- 基础转换 ----------
 
-    /** IP转长整型 */
+    /** IP转长整型（不允许八位组带前导零，如 "01"——避免与部分工具的八进制解释产生歧义） */
     public static long ipToLong(String ip) {
         String[] parts = ip.split("\\.");
         if (parts.length != 4) throw new IllegalArgumentException("无效IP格式: " + ip);
         long result = 0;
         for (int i = 0; i < 4; i++) {
+            if (parts[i].length() > 1 && parts[i].startsWith("0")) {
+                throw new IllegalArgumentException("无效IP段（八位组不允许前导零）: " + parts[i]);
+            }
             int octet = Integer.parseInt(parts[i]);
             if (octet < 0 || octet > 255) throw new IllegalArgumentException("无效IP段: " + octet);
             result = (result << 8) | octet;
@@ -83,8 +86,11 @@ public class SubnetCalculator {
         return 1L << bits;
     }
 
-    /** 可用主机数 */
+    /** 可用主机数（prefix 合法范围 0-32） */
     public static long getUsableHostCount(int prefix) {
+        if (prefix < 0 || prefix > 32) {
+            throw new IllegalArgumentException("前缀必须在 0-32 之间: " + prefix);
+        }
         if (prefix >= 32) return 1;
         if (prefix == 31) return 2;
         if (prefix == 0) return 0xFFFFFFFFL - 1;
@@ -611,13 +617,25 @@ public class SubnetCalculator {
         return sb.toString();
     }
 
+    /** 重叠检测允许的最大 CIDR 数量：检测为 O(n²) 复杂度，超限会拖垮 UI 并可能 OOM */
+    public static final int MAX_OVERLAP_INPUT = 1000;
+
     /**
      * 检测多个 CIDR 是否存在重叠
      */
     public static String detectOverlaps(String... cidrs) {
-        // 验证所有 CIDR 的有效性
-        for (String cidr : cidrs) {
-            CidrValidator.validateCidr(cidr);
+        if (cidrs.length > MAX_OVERLAP_INPUT) {
+            throw new IllegalArgumentException(
+                "CIDR 数量过多（" + cidrs.length + " 个），重叠检测为 O(n²) 复杂度，请控制在 "
+                + MAX_OVERLAP_INPUT + " 个以内");
+        }
+        // 验证所有 CIDR 的有效性，并在错误消息中标注位置，便于用户定位第几个输入有误
+        for (int i = 0; i < cidrs.length; i++) {
+            try {
+                CidrValidator.validateCidr(cidrs[i]);
+            } catch (ValidationError e) {
+                throw new ValidationError(e.getField(), "第 " + (i + 1) + " 个 CIDR 无效: " + e.getMessage());
+            }
         }
         
         StringBuilder sb = new StringBuilder();

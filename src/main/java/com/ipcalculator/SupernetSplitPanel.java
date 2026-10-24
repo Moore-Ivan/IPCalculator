@@ -91,7 +91,8 @@ public class SupernetSplitPanel extends BaseOperationPanel {
                 clearErrors(cidrError, prefixError);
 
                 long totalCount = SubnetController.getSplitSupernetCount(cidr, newPrefix);
-                final int pageSize = 100;
+                // 复用 SubnetTablePanel 的默认页大小，避免硬编码与面板 pageSize 脱节
+                final int pageSize = SubnetTablePanel.DEFAULT_PAGE_SIZE;
 
                 if (totalCount <= pageSize * 2) {
                     CalculationWorker.executeWithProgress(this, "正在拆分超网...", btnSplit,

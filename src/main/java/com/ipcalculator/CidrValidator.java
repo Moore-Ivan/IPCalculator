@@ -179,9 +179,14 @@ public class CidrValidator {
         long start, end;
         try {
             start = SubnetCalculator.ipToLong(startIp.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ValidationError(ValidationError.Field.IP_START, "无效的起始 IP: " + e.getMessage());
+        }
+        try {
             end = SubnetCalculator.ipToLong(endIp.trim());
         } catch (IllegalArgumentException e) {
-            throw new ValidationError(ValidationError.Field.IP_START, "无效的 IP 地址格式: " + e.getMessage());
+            // 结束 IP 非法时错误必须归属到结束 IP 字段，避免用户被误导去改起始 IP
+            throw new ValidationError(ValidationError.Field.IP_END, "无效的结束 IP: " + e.getMessage());
         }
         if (start > end) {
             throw new ValidationError(ValidationError.Field.IP_START, "起始 IP 不能大于结束 IP");

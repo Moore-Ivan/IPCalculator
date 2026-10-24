@@ -19,8 +19,10 @@ public class ResultTablePanel extends JPanel {
     
     // 列宽记忆
     private int[] columnWidths = {150, 350}; // 默认3:7比例
-    /** 列宽/尺寸监听器是否已注册：保证幂等，避免 setData 反复调用 applyColumnSettings 时监听器不断累积 */
-    private boolean listenersRegistered = false;
+    /** 列模型监听器：fireTableStructureChanged 会重建 TableColumn 对象，需要每次重新挂载 */
+    private javax.swing.event.TableColumnModelListener columnModelListener;
+    /** 面板尺寸监听器只注册一次（不依赖列模型重建） */
+    private boolean componentListenerRegistered = false;
     
     public ResultTablePanel() {
         setLayout(new BorderLayout());
@@ -127,15 +129,12 @@ public class ResultTablePanel extends JPanel {
             table.getColumnModel().getColumn(i).setMinWidth(60);
         }
         
-        // 监听列宽/尺寸变化只需注册一次：setData 会重复调用本方法，
-        // 若每次注册会导致监听器随调用次数不断累积（内存持续增长）
-        if (listenersRegistered) {
-            return;
+        // 列宽变化监听：fireTableStructureChanged 会重建 TableColumn 对象（列宽丢失、
+        // 监听挂载点变化），因此每次调用都先移除旧监听器再重新注册，保证不累积也不失效
+        if (columnModelListener != null) {
+            table.getColumnModel().removeColumnModelListener(columnModelListener);
         }
-        listenersRegistered = true;
-
-        // 监听列宽变化，保存到记忆
-        table.getColumnModel().addColumnModelListener(new javax.swing.event.TableColumnModelListener() {
+        columnModelListener = new javax.swing.event.TableColumnModelListener() {
             @Override
             public void columnAdded(javax.swing.event.TableColumnModelEvent e) {}
             @Override
@@ -151,15 +150,19 @@ public class ResultTablePanel extends JPanel {
             }
             @Override
             public void columnSelectionChanged(javax.swing.event.ListSelectionEvent e) {}
-        });
-        
-        // 监听面板大小变化，调整"值"列填满容器
-        addComponentListener(new java.awt.event.ComponentAdapter() {
-            @Override
-            public void componentResized(java.awt.event.ComponentEvent e) {
-                resizeValueColumn();
-            }
-        });
+        };
+        table.getColumnModel().addColumnModelListener(columnModelListener);
+
+        // 面板大小变化监听与列模型无关，只注册一次
+        if (!componentListenerRegistered) {
+            componentListenerRegistered = true;
+            addComponentListener(new java.awt.event.ComponentAdapter() {
+                @Override
+                public void componentResized(java.awt.event.ComponentEvent e) {
+                    resizeValueColumn();
+                }
+            });
+        }
     }
     
     /**
@@ -241,6 +244,10 @@ public class ResultTablePanel extends JPanel {
      * 获取所有数据作为文本（制表符分隔）
      */
     public String getAllDataAsText() {
+        // 空表格直接返回空串：否则会返回纯表头，让调用方误判"有内容可复制"
+        if (model.getRowCount() == 0) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         // 表头
         for (int col = 0; col < model.getColumnCount(); col++) {

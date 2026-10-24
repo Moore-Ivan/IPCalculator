@@ -101,10 +101,17 @@ public class CidrPreviewPanel extends JPanel {
                 showError("格式错误，应为 x.x.x.x/yy");
                 return;
             }
-            
+
             String ip = parts[0];
-            int prefix = Integer.parseInt(parts[1]);
-            
+            int prefix;
+            try {
+                prefix = Integer.parseInt(parts[1]);
+            } catch (NumberFormatException e) {
+                // 单独捕获并给出中文提示，避免直接显示 "For input string: \"xx\"" 这类英文消息
+                showError("前缀长度必须是数字");
+                return;
+            }
+
             if (prefix < 0 || prefix > 32) {
                 showError("前缀必须在 0-32 之间");
                 return;
@@ -134,8 +141,24 @@ public class CidrPreviewPanel extends JPanel {
         wildcardLabel.setText("---");
         hostCountLabel.setText("---");
         previewArea.setBorder(errorBorder);
-        previewArea.setBackground(UIManager.getColor("OptionPane.errorBackground")
-                != null ? UIManager.getColor("OptionPane.errorBackground") : new Color(255, 240, 240));
+        previewArea.setBackground(getThemeErrorBackground());
+    }
+
+    /**
+     * 主题感知的错误背景：以 FlatLaf 语义错误色（Component.error.focusedBorderColor）
+     * 与面板背景按 1:3 混合派生，暗色主题下自动偏暗不再刺眼；
+     * 取不到主题色时回退浅红。
+     */
+    private static Color getThemeErrorBackground() {
+        Color error = UIManager.getColor("Component.error.focusedBorderColor");
+        Color base = UIManager.getColor("Panel.background");
+        if (error == null || base == null) {
+            return new Color(255, 240, 240);
+        }
+        return new Color(
+                (error.getRed() + base.getRed() * 3) / 4,
+                (error.getGreen() + base.getGreen() * 3) / 4,
+                (error.getBlue() + base.getBlue() * 3) / 4);
     }
     
     public void refresh() {

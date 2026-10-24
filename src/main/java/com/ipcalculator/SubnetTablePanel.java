@@ -29,7 +29,7 @@ public class SubnetTablePanel extends JPanel {
     private JProgressBar loadingBar;      // 分页加载进度指示（不确定模式动画）
     private JButton prevButton, nextButton, firstButton, lastButton;
     private int currentPage = 1;
-    private int pageSize = 100;
+    private int pageSize = DEFAULT_PAGE_SIZE;
     private long totalRows = 0;
     private List<SubnetRow> allData = new ArrayList<>();
     private boolean isPageLoading = false; // 分页数据加载中标志
@@ -39,7 +39,15 @@ public class SubnetTablePanel extends JPanel {
     private boolean pagedMode = false;
     private PagedDataProvider pagedProvider;
     public static final int MAX_PAGES = 10000; // 最大页数限制，防止性能爆炸
-    public static final int PAGED_MODE_THRESHOLD = 50000; // 超过此数量自动切换分页模式
+    /** 默认每页条数：外部调用方（IPv6SubnetPanel 等）计算最大可显示数量时应复用此常量，避免硬编码与本面板 pageSize 脱节 */
+    public static final int DEFAULT_PAGE_SIZE = 100;
+    /**
+     * 分页渲染阈值：超过此数量自动切换"分页渲染"模式。
+     * 注意：此模式下数据仍整份保存在堆内存（dataCopy），仅节省 JTable 渲染开销；
+     * 真正不占内存的海量数据路径是 setPagedData()（服务端分页）。超过
+     * MAX_MEMORY_DATA_SIZE 时 setData() 直接抛异常，强制走 setPagedData()。
+     */
+    public static final int PAGED_MODE_THRESHOLD = 50000;
     public static final int MAX_MEMORY_DATA_SIZE = 100000; // 最大内存数据量，超过此值应使用服务端分页
     
     // 列宽记忆
@@ -329,6 +337,8 @@ public class SubnetTablePanel extends JPanel {
                                 if (statusCallback != null) {
                                     statusCallback.accept("已复制全部 " + allRows.size() + " 条数据");
                                 }
+                            } catch (java.util.concurrent.CancellationException ignored) {
+                                // 用户取消导出：静默返回，不弹"导出失败"
                             } catch (Exception ex) {
                                 JOptionPane.showMessageDialog(SubnetTablePanel.this,
                                     "导出失败: " + ex.getMessage(),
@@ -387,6 +397,8 @@ public class SubnetTablePanel extends JPanel {
                                 if (statusCallback != null) {
                                     statusCallback.accept("已导出全部 " + allRows.size() + " 条数据为 CSV 格式");
                                 }
+                            } catch (java.util.concurrent.CancellationException ignored) {
+                                // 用户取消导出：静默返回，不弹"导出失败"
                             } catch (Exception ex) {
                                 JOptionPane.showMessageDialog(SubnetTablePanel.this,
                                     "导出失败: " + ex.getMessage(),
@@ -772,6 +784,11 @@ public class SubnetTablePanel extends JPanel {
     
     /** 获取表格数据（含表头）的制表符分隔文本，用于复制 */
     public String getAllDataAsText() {
+        // 无数据时返回空串：否则会返回纯表头，让调用方误判"有内容可复制"
+        int rowCount = pagedMode ? model.getRowCount() : allData.size();
+        if (rowCount == 0) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         // 表头
         for (int col = 0; col < model.getColumnCount(); col++) {
